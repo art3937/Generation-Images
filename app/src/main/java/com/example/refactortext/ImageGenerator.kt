@@ -1,4 +1,4 @@
-package com.example.audiobible.generatorAll
+package com.example.refactortext
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

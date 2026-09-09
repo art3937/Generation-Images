@@ -1,14 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
+// === ЧТЕНИЕ КЛЮЧЕЙ ИЗ LOCAL.PROPERTIES (Вынесено на самый верх) ===
+val localProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.exists()) {
+        propertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "com.example.refactortext"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.refactortext"
@@ -18,13 +24,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Получаем значения напрямую из local.properties
+        // Если в файле кавычки уже стоят, Gradle запишет их правильно
+        val apiKeyVal = localProperties.getProperty("YANDEX_API_KEY") ?: "\"\""
+        val folderIdVal = localProperties.getProperty("YANDEX_FOLDER_ID") ?: "\"\""
+
+        buildConfigField("String", "YANDEX_API_KEY", apiKeyVal)
+        buildConfigField("String", "YANDEX_FOLDER_ID", folderIdVal)
+
     }
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
@@ -34,6 +51,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true // Включает автогенерацию класса BuildConfig
     }
 }
 
@@ -48,6 +66,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+
     // 1. Официальный SDK от Google для работы с Gemini API
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 

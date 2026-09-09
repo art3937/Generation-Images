@@ -20,7 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.example.audiobible.generatorAll.ImageGenerator
+import com.example.refactortext.ImageGenerator
 import com.example.refactortext.databinding.ActivityMainBinding
 import java.io.File
 import java.io.FileOutputStream
@@ -62,11 +62,15 @@ class MainActivity : AppCompatActivity() {
                     contentResolver.openOutputStream(uri).use { outputStream ->
                         if (outputStream != null) {
                             bitmapToSave.compress(Bitmap.CompressFormat.JPEG, 95, outputStream)
-                            Toast.makeText(this, "Изображение успешно сохранено!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                this, "Изображение успешно сохранено!", Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
                 } else {
-                    Toast.makeText(this, "Не удалось извлечь изображение для сохранения", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this, "Не удалось извлечь изображение для сохранения", Toast.LENGTH_SHORT
+                    ).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -93,29 +97,26 @@ class MainActivity : AppCompatActivity() {
             val rawText = binding.etInputText.text.toString()
             if (rawText.isNotBlank()) {
                 binding.btnParse.isEnabled = false
-                binding.btnParse.text = "ИИ Макс считает..."
-                Toast.makeText(this, "Запрос отправлен ИИ Максу", Toast.LENGTH_SHORT).show()
+                binding.btnParse.text = "Считаю через ИИ..."
 
                 lifecycleScope.launch {
-                    // Вызываем наш текстовый парсер с бесплатной моделью mistral
-                    val tableResult = OrderParser.parseTextWithAI(rawText)
-
-                    if (tableResult != null && !tableResult.contains("Ошибка ИИ")) {
+                    try {
+                        val tableResult = OrderParser.parseTextWithAI(rawText)
                         binding.tvResult.text = tableResult
-                        binding.layoutResult.visibility = View.VISIBLE // Показываем блок с готовой таблицей
-                        Toast.makeText(this@MainActivity, "Таблица успешно составлена!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this@MainActivity, "Не удалось распределить. Проверьте логи.", Toast.LENGTH_SHORT).show()
+                        binding.layoutResult.visibility = View.VISIBLE
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@MainActivity, "Произошла ошибка сети!", Toast.LENGTH_SHORT
+                        ).show()
+                    } finally {
+                        binding.btnParse.isEnabled = true
+                        binding.btnParse.text = "Распределить"
                     }
-
-                    binding.btnParse.isEnabled = true
-                    binding.btnParse.text = "Распределить"
                 }
             } else {
                 Toast.makeText(this, "Поле ввода не должно быть пустым!", Toast.LENGTH_SHORT).show()
             }
         }
-
 
 
         // Кнопка: Генерация изображения (Бесплатный запрос через Cloudflare FLUX)
@@ -125,7 +126,8 @@ class MainActivity : AppCompatActivity() {
             if (prompt.isNotBlank()) {
                 binding.btnGenerateImg.isEnabled = false
                 binding.btnGenerateImg.text = "ИИ рисует (Бесплатно)..."
-                Toast.makeText(this, "Запрос отправлен в Cloudflare FLUX", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Запрос отправлен в Cloudflare FLUX", Toast.LENGTH_SHORT)
+                    .show()
 
                 lifecycleScope.launch {
                     val bitmapResult = ImageGenerator.generateImage(this@MainActivity, prompt)
@@ -133,15 +135,22 @@ class MainActivity : AppCompatActivity() {
                         binding.ivGeneratedResult.setImageBitmap(bitmapResult)
                         binding.ivGeneratedResult.visibility = View.VISIBLE
                         binding.btnSaveImage.visibility = View.VISIBLE
-                        Toast.makeText(this@MainActivity, "ИИ отрисовал картинку!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@MainActivity, "ИИ отрисовал картинку!", Toast.LENGTH_SHORT
+                        ).show()
                     } else {
-                        Toast.makeText(this@MainActivity, "Не удалось получить картинку. Проверьте логи.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Не удалось получить картинку. Проверьте логи.",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                     binding.btnGenerateImg.isEnabled = true
                     binding.btnGenerateImg.text = "Сгенерировать картинку ИИ"
                 }
             } else {
-                Toast.makeText(this, "Введите описание в текстовое поле!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Введите описание в текстовое поле!", Toast.LENGTH_SHORT)
+                    .show()
             }
         }
 
