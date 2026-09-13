@@ -2,7 +2,7 @@ name: Облачная сборка и обновление APK 🤖
 
 on:
   push:
-    branches: [ main, master ] # Срабатывает автоматически при пуше через батник
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -18,17 +18,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Компилируем именно релизную (оптимизированную) версию приложения
-      # Мы убрали плагины подписи, так как ты настроил автоподпись в Gradle через my_keys.jks
-      # Если автоподпись в Gradle не настроена, соберется незавершенный релизный APK
-      # Для полной автоматизации Гитхаб просто заберёт готовый скомпилированный файл
-      Tar:
       - name: Build with Gradle
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease
 
-      # Публикуем готовый файл на страницу Релизов v1.0.0, чтобы водители могли легко его скачать
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -37,6 +31,6 @@ jobs:
           body: "Этот APK-файл автоматически обновляется при каждом запуске батника на Рабочем столе."
           draft: false
           prerelease: false
-          files: app/build/outputs/apk/release/app-release-unsigned.apk # Сюда пойдет скомпилированный релизный файл
+          files: app/build/outputs/apk/release/app-release-unsigned.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
