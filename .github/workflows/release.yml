@@ -22,19 +22,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build with Gradle
-        run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease
-
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Актуальная версия приложения 🚀"
-          body: "Этот APK-файл автоматически обновляется при каждом запуске батника на Рабочем столе."
+          # Магия: GitHub сам подставит уникальный номер сборки (например, v1.0.14, v1.0.15)
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Релиз приложения v1.0.${{ github.run_number }} 🚀"
+          body: "Автоматический релиз. Код успешно пересобран в облаке через батник."
           draft: false
           prerelease: false
           files: app/build/outputs/apk/release/app-release-unsigned.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
