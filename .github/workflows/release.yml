@@ -11,20 +11,20 @@ jobs:
       - name: Проверка кода
         uses: actions/checkout@v4
 
+      # Обновлено до актуальной версии v5, убирает предупреждения о депрекации Node
       - name: Установка Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # Даем права на выполнение сборщику Gradle
       - name: Разрешение на запуск Gradle
         run: chmod +x gradlew
 
       - name: Сборка релизного APK
         run: ./gradlew assembleRelease
 
-      # Официальный плагин подписи из официального маркетплейса GitHub
+      # ИСПРАВЛЕНИЕ: Жестко указываем версию buildToolsVersion, чтобы плагин нашел утилиту zipalign
       - name: Подпись релизного APK
         id: sign_apk
         uses: r0adkll/sign-android-release@v1
@@ -32,11 +32,12 @@ jobs:
           releaseDirectory: app/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.KEY_STORE_BASE64 }}
           alias: ${{ secrets.KEY_ALIAS }}
-          singleIo: ${{ secrets.KEY_STORE_PASSWORD }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0" # Используем актуальные инструменты сборки
 
-      # Перезаписываем один и тот же постоянный релиз v1.0.0
+      # Обновлено до актуальной версии v2, перезаписывает релиз v1.0.0
       - name: Загрузка APK на GitHub Релизы
         uses: softprops/action-gh-release@v2
         with:
