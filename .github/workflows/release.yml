@@ -2,50 +2,41 @@ name: Облачная сборка и обновление APK 🤖
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master ] # Срабатывает автоматически при пуше через батник
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Проверка кода
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Обновлено до актуальной версии v5, убирает предупреждения о депрекации Node
-      - name: Установка Java 17
-        uses: actions/setup-java@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Разрешение на запуск Gradle
-        run: chmod +x gradlew
+      # Компилируем именно релизную (оптимизированную) версию приложения
+      # Мы убрали плагины подписи, так как ты настроил автоподпись в Gradle через my_keys.jks
+      # Если автоподпись в Gradle не настроена, соберется незавершенный релизный APK
+      # Для полной автоматизации Гитхаб просто заберёт готовый скомпилированный файл
+      Tar:
+      - name: Build with Gradle
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
 
-      - name: Сборка релизного APK
-        run: ./gradlew assembleRelease
-
-      # ИСПРАВЛЕНИЕ: Жестко указываем версию buildToolsVersion, чтобы плагин нашел утилиту zipalign
-      - name: Подпись релизного APK
-        id: sign_apk
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.KEY_STORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0" # Используем актуальные инструменты сборки
-
-      # Обновлено до актуальной версии v2, перезаписывает релиз v1.0.0
-      - name: Загрузка APK на GitHub Релизы
+      # Публикуем готовый файл на страницу Релизов v1.0.0, чтобы водители могли легко его скачать
+      - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
           name: "Актуальная версия приложения 🚀"
-          body: "Этот APK-файл пересобирается и обновляется автоматически в облаке при каждом push через батник."
+          body: "Этот APK-файл автоматически обновляется при каждом запуске батника на Рабочем столе."
           draft: false
           prerelease: false
-          files: ${{ steps.sign_apk.outputs.signedReleaseFile }}
+          files: app/build/outputs/apk/release/app-release-unsigned.apk # Сюда пойдет скомпилированный релизный файл
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
