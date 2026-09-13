@@ -2,7 +2,7 @@ name: Облачная сборка и обновление APK 🤖
 
 on:
   push:
-    branches: [ main, master ] # Срабатывает, когда ты запускаешь свой обычный батник git_push
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -39,6 +39,6 @@ jobs:
           body: "Этот APK-файл пересобирается и обновляется автоматически в облаке при каждом push через батник."
           draft: false
           prerelease: false
-          files: ${{ steps:sign_apk.outputs.signed_apk_path }} # Берем путь подписанного файла
+          files: ${{ steps.sign_apk.outputs.signed_apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
