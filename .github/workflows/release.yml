@@ -17,28 +17,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Сборка незавершённого APK
+      # Даем права на выполнение сборщику Gradle
+      - name: Разрешение на запуск Gradle
+        run: chmod +x gradlew
+
+      - name: Сборка релизного APK
         run: ./gradlew assembleRelease
 
-      # Магия: восстанавливаем .jks файл из Base64 строки прямо в облаке
+      # Официальный плагин подписи из официального маркетплейса GitHub
       - name: Подпись релизного APK
         id: sign_apk
-        uses: rchalupa/android-sign-apk@v1.2.0
+        uses: r0adkll/sign-android-release@v1
         with:
-          keystore_base64: ${{ secrets.KEY_STORE_BASE64 }}
-          keystore_password: ${{ secrets.KEY_STORE_PASSWORD }}
-          key_alias: ${{ secrets.KEY_ALIAS }}
-          key_password: ${{ secrets.KEY_PASSWORD }}
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEY_STORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          singleIo: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-      # Создаём или полностью перезаписываем один и тот же постоянный релиз v1.0.0
+      # Перезаписываем один и тот же постоянный релиз v1.0.0
       - name: Загрузка APK на GitHub Релизы
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          name: "Актуальная накладная (Авто-обновление) 🚀"
+          name: "Актуальная версия приложения 🚀"
           body: "Этот APK-файл пересобирается и обновляется автоматически в облаке при каждом push через батник."
           draft: false
           prerelease: false
-          files: ${{ steps.sign_apk.outputs.signed_apk_path }}
+          files: ${{ steps.sign_apk.outputs.signedReleaseFile }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
