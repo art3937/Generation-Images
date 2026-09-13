@@ -1,0 +1,44 @@
+name: Облачная сборка и обновление APK 🤖
+
+on:
+  push:
+    branches: [ main, master ] # Срабатывает, когда ты запускаешь свой обычный батник git_push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверка кода
+        uses: actions/checkout@v4
+
+      - name: Установка Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Сборка незавершённого APK
+        run: ./gradlew assembleRelease
+
+      # Магия: восстанавливаем .jks файл из Base64 строки прямо в облаке
+      - name: Подпись релизного APK
+        id: sign_apk
+        uses: rchalupa/android-sign-apk@v1.2.0
+        with:
+          keystore_base64: ${{ secrets.KEY_STORE_BASE64 }}
+          keystore_password: ${{ secrets.KEY_STORE_PASSWORD }}
+          key_alias: ${{ secrets.KEY_ALIAS }}
+          key_password: ${{ secrets.KEY_PASSWORD }}
+
+      # Создаём или полностью перезаписываем один и тот же постоянный релиз v1.0.0
+      - name: Загрузка APK на GitHub Релизы
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "Актуальная накладная (Авто-обновление) 🚀"
+          body: "Этот APK-файл пересобирается и обновляется автоматически в облаке при каждом push через батник."
+          draft: false
+          prerelease: false
+          files: ${{ steps:sign_apk.outputs.signed_apk_path }} # Берем путь подписанного файла
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
