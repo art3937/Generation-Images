@@ -53,16 +53,20 @@ object ImageGenerator {
 
             // ЛОГИРОВАНИЕ ПЕРЕВОДА
             Log.d(TAG, "[IMAGE] ---> СТАРТ ПЕРЕВОДА. Исходный текст: $russianPrompt")
+            val correctedPrompt = TextAutoCorrector.correctText(russianPrompt)
+
             val englishPrompt = try {
-                val translated = TextTranslator.translateRuToEn(russianPrompt)
-                Log.i(TAG, "[IMAGE] ---> УСПЕХ ПЕРЕВОДА: '$russianPrompt' переведено в '$translated'")
-                translated
+                Log.d(TAG, "[IMAGE] Перевод промпта: \"$correctedPrompt\"")
+                TextTranslator.translateRuToEn(correctedPrompt)
             } catch (e: Exception) {
-                Log.e(TAG, "[IMAGE] ---> ОШИБКА ПЕРЕВОДА: ${e.localizedMessage}. Используем исходный текст.")
-                russianPrompt
+                Log.e(TAG, "[IMAGE] Ошибка перевода: ${e.localizedMessage}. Используем исправленный русский.")
+                correctedPrompt
             }
 
-            val enhancedPrompt = "$englishPrompt, highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
+
+            //val enhancedPrompt = "$englishPrompt, highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
+            val enhancedPrompt = "$englishPrompt. High quality, clear details, well-defined shapes, rich colors."
+
 
             // Уникальный идентификатор запроса для синхронизации потоков (вместо имени файла кэша)
             val requestKey = sha256(enhancedPrompt)

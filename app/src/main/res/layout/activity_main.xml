@@ -1,132 +1,187 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView  xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#F5F5F5"
     tools:context=".MainActivity">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16.dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="80dp"
+        android:clipToPadding="false">
 
+        <!-- Заголовок -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginVertical="16.dp"
-            android:text="ИИ Генератор картинокь от Атема)) 🤖"
+            android:layout_marginBottom="16dp"
+            android:text="Умный Помощник Заказов и генератор картинок от Телегина 🤖"
             android:textColor="#3E2723"
             android:textSize="22sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:gravity="center_horizontal" />
 
+        <!-- Поле ввода текста -->
         <EditText
             android:id="@+id/etInputText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:maxHeight="120dp"
+            android:minLines="4"
+            android:maxHeight="160dp"
             android:background="@android:drawable/edit_text"
             android:gravity="top|start"
-            android:hint="Вставте текст"
+            android:hint="Вставьте наговорённый текст заказа сюда..."
             android:importantForAutofill="no"
             android:inputType="textMultiLine"
-            android:padding="12.dp" />
+            android:padding="14dp"
+            android:textSize="15sp" />
 
+        <!-- Главная кнопка распределения -->
         <Button
             android:id="@+id/btnParse"
             android:layout_width="match_parent"
-            android:layout_height="55.dp"
-            android:layout_marginTop="16.dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="16dp"
             android:backgroundTint="#5D4037"
-            android:text="РАСПРЕДЕЛИТЬ ПО ТАБЛИЦЕ"
+            android:text="📊 РАСПРЕДЕЛИТЬ ПО ТАБЛИЦЕ"
             android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp" />
 
-            android:textSize="16sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
-        <!-- Новая кнопка Очистить -->
-        <Button
-            android:id="@+id/btnClear"
-            android:layout_width="wrap_content"
+        <!-- Горизонтальный блок управления -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:backgroundTint="#B0BEC5"
-            android:text="ОЧИСТИТЬ ВСЁ"
-            android:textColor="#37474F" />
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:weightSum="2">
 
-        <!-- Кнопка генерации изображения -->
-        <Button
-            android:id="@+id/btnGenerateImg"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Сгенерировать картинку" />
+            <Button
+                android:id="@+id/btnClear"
+                android:layout_width="0dp"
+                android:layout_height="50dp"
+                android:layout_weight="0.9"
+                android:layout_marginRight="6dp"
+                android:backgroundTint="#CFD8DC"
+                android:text="❌ ОЧИСТИТЬ"
+                android:textColor="#37474F"
+                android:textSize="12sp"
+                app:cornerRadius="8dp" />
 
-    </LinearLayout>
+            <Button
+                android:id="@+id/btnGenerateImg"
+                android:layout_width="0dp"
+                android:layout_height="50dp"
+                android:layout_weight="1.1"
+                android:layout_marginLeft="6dp"
+                android:backgroundTint="#78909C"
+                android:text="🎨 Создать картинку"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                app:cornerRadius="8dp" />
+        </LinearLayout>
+
+        <!-- Блок работы с картинкой ИИ -->
+        <ImageView
+            android:id="@+id/ivGeneratedResult"
+            android:layout_width="280dp"
+            android:layout_height="280dp"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:layout_marginTop="16dp"
+            android:scaleType="centerCrop"
+            tools:visibility="visible"
+            tools:src="@android:drawable/ic_menu_gallery" />
 
         <Button
             android:id="@+id/btnSaveImage"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Сохранить картинку ИИ"
-            android:visibility="gone" /> <!-- По умолчанию скрыта, появится когда картинка дожарится -->
-
-
-        <!-- ImageView для вывода картинки -->
-        <ImageView
-            android:id="@+id/ivGeneratedResult"
-            android:layout_width="300dp"
-            android:layout_height="300dp"
-            android:layout_gravity="center"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#455A64"
+            android:text="💾 Сохранить картинку ИИ"
+            android:textColor="#FFFFFF"
             android:visibility="gone"
-            android:layout_marginTop="16dp" />
+            app:cornerRadius="8dp" />
 
-
+        <!-- Блок результатов парсинга -->
         <LinearLayout
             android:id="@+id/layoutResult"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24.dp"
-            android:background="#FFFFFF"
+            android:layout_marginTop="20dp"
+            android:background="@android:drawable/dialog_holo_light_frame"
+            android:elevation="4dp"
             android:orientation="vertical"
-            android:padding="16.dp"
+            android:padding="16dp"
             android:visibility="gone"
             tools:visibility="visible">
 
+            <!-- Поле вывода таблицы -->
             <TextView
                 android:id="@+id/tvResult"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:lineSpacingMultiplier="1.2"
+                android:lineSpacingMultiplier="1.3"
                 android:text="Тут будет результат"
                 android:textColor="#212121"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
 
-            <!-- Кнопка 1: Копирование в буфер -->
             <Button
                 android:id="@+id/btnCopy"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16.dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
                 android:backgroundTint="#8D6E63"
-                android:text="СКОПИРОВАТЬ В БУФЕР"
-                android:textColor="#FFFFFF" />
+                android:text="📋 СКОПИРОВАТЬ В БУФЕР"
+                android:textColor="#FFFFFF"
+                app:cornerRadius="8dp" />
 
-            <!-- Кнопка 2: Сохранение в файл TXT -->
             <Button
                 android:id="@+id/btnSaveFile"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8.dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
                 android:backgroundTint="#4E342E"
-                android:text="СКАЧАТЬ ТЕКСТОВЫЙ ФАЙЛ"
-                android:textColor="#FFFFFF" />
+                android:text="📄 СКАЧАТЬ ТЕКСТОВЫЙ ФАЙЛ"
+                android:textColor="#FFFFFF"
+                app:cornerRadius="8dp" />
+
+            <Button
+                android:id="@+id/btnSaveExcel"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#2E7D32"
+                android:text="🟩 СОХРАНИТЬ В EXCEL"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible"
+                app:cornerRadius="8dp" />
+
+            <Button
+                android:id="@+id/btnOpenExcel"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#1B5E20"
+                android:text="👁️ ОТКРЫТЬ В EXCEL"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible"
+                app:cornerRadius="8dp" />
         </LinearLayout>
 
     </LinearLayout>

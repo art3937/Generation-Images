@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.refactortext"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -32,6 +32,8 @@ android {
 
         buildConfigField("String", "YANDEX_API_KEY", apiKeyVal)
         buildConfigField("String", "YANDEX_FOLDER_ID", folderIdVal)
+
+
 
     }
 
@@ -78,4 +80,8 @@ dependencies {
 
     // Библиотека перевода Google ML Kit
     implementation("com.google.mlkit:translate:17.0.3")
+
+    // POI для Excel (современная версия)
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
 }

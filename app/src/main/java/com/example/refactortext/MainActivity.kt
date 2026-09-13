@@ -1,199 +1,126 @@
 package com.example.refactortext
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.ContentValues
-import android.content.Context
+import android.content.*
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
-import android.util.Log
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.example.refactortext.ImageGenerator
 import com.example.refactortext.databinding.ActivityMainBinding
-import java.io.File
-import java.io.FileOutputStream
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivityMainBinding
-    private val TAG = "BREAD_PARSER_LOG"
+    private var lastOrder: OrderParser.ParsedOrder? = null
+    private var lastSavedExcelUri: android.net.Uri? = null
 
-    // 1. ЛАУНЧЕР ДЛЯ СОХРАНЕНИЯ ТЕКСТОВОЙ ТАБЛИЦЫ (.txt)
-    private val createTextFileLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("text/plain")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val textToSave = binding.tvResult.text.toString()
-                contentResolver.openOutputStream(uri).use { outputStream ->
-                    outputStream?.write(textToSave.toByteArray(Charsets.UTF_8))
-                }
-                Toast.makeText(this, "Таблица успешно сохранена!", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this, "Ошибка при записи файла", Toast.LENGTH_SHORT).show()
-            }
-        }
+    private val txtLauncher = registerForActivityResult(CreateDocument("text/plain")) { uri ->
+        uri?.let { saveBytes(it, binding.tvResult.text.toString().toByteArray()) }
     }
-
-    // 2. ЛАУНЧЕР ДЛЯ СОХРАНЕНИЯ КАРТИНКИ ИИ (.jpg) С ВЫБОРОМ ИМЕНИ
-    private val createImageFileLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("image/jpeg")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val drawable = binding.ivGeneratedResult.drawable as? BitmapDrawable
-                val bitmapToSave = drawable?.bitmap
-
-                if (bitmapToSave != null) {
-                    contentResolver.openOutputStream(uri).use { outputStream ->
-                        if (outputStream != null) {
-                            bitmapToSave.compress(Bitmap.CompressFormat.JPEG, 95, outputStream)
-                            Toast.makeText(
-                                this, "Изображение успешно сохранено!", Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                } else {
-                    Toast.makeText(
-                        this, "Не удалось извлечь изображение для сохранения", Toast.LENGTH_SHORT
-                    ).show()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(this, "Ошибка при сохранении картинки", Toast.LENGTH_SHORT).show()
+    private val imgLauncher = registerForActivityResult(CreateDocument("image/jpeg")) { uri ->
+        val bmp = (binding.ivGeneratedResult.drawable as? BitmapDrawable)?.bitmap
+        uri?.let { u -> bmp?.let { b -> contentResolver.openOutputStream(u)?.use { b.compress(Bitmap.CompressFormat.JPEG, 95, it) } } }
+    }
+    private val xlsLauncher = registerForActivityResult(CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) { uri ->
+        uri?.let { u -> lastOrder?.let { o ->
+            toggleExcelBtn(false, "Сохраняю...")
+            lifecycleScope.launch {
+                val ok = OrderExcelExporter.saveToExcel(this@MainActivity, u, o)
+                if (ok) {
+                    lastSavedExcelUri = u
+                    binding.btnOpenExcel.visibility = View.VISIBLE
+                    toast("Excel успешно сохранён!")
+                } else { toast("Ошибка Excel") }
+                toggleExcelBtn(true, "СОХРАНИТЬ В EXCEL")
             }
-        }
+        }}
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        binding = ActivityMainBinding.inflate(layoutInflater).also { setContentView(it.root) }
 
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
-
-        // Кнопка: Распределить (Текст через YandexGPT Pro)
         binding.btnParse.setOnClickListener {
-            val rawText = binding.etInputText.text.toString()
-            if (rawText.isNotBlank()) {
-                binding.btnParse.isEnabled = false
-                binding.btnParse.text = "Считаю через ИИ..."
-
-                lifecycleScope.launch {
-                    try {
-                        val tableResult = OrderParser.parseTextWithAI(rawText)
-                        binding.tvResult.text = tableResult
-                        binding.layoutResult.visibility = View.VISIBLE
-                    } catch (e: Exception) {
-                        Toast.makeText(
-                            this@MainActivity, "Произошла ошибка сети!", Toast.LENGTH_SHORT
-                        ).show()
-                    } finally {
-                        binding.btnParse.isEnabled = true
-                        binding.btnParse.text = "Распределить"
-                    }
+            val txt = binding.etInputText.text.toString()
+            if (txt.isBlank()) return@setOnClickListener toast("Поле ввода пусто!")
+            binding.btnParse.isEnabled = false; binding.btnParse.text = "Считаю..."
+            lifecycleScope.launch {
+                try {
+                    val res = OrderParser.parseTextWithAI(txt)
+                    binding.tvResult.text = res.text
+                    binding.layoutResult.visibility = View.VISIBLE
+                    lastOrder = res.order
+                    if (res.order.newPositions.isNotEmpty() || res.order.exchangePositions.isNotEmpty()) binding.btnSaveExcel.visibility = View.VISIBLE
+                } catch (e: Exception) { toast("Ошибка сети!") }
+                finally {
+                    binding.btnParse.isEnabled = true; binding.btnParse.text = "РАСПРЕДЕЛИТЬ"
+                    hideKeyboard() // ФОКУС: Прячем клаву сразу после вывода таблицы
                 }
-            } else {
-                Toast.makeText(this, "Поле ввода не должно быть пустым!", Toast.LENGTH_SHORT).show()
             }
         }
 
+        binding.btnSaveExcel.setOnClickListener { xlsLauncher.launch("zakaz_${System.currentTimeMillis()}.xlsx") }
+        binding.btnSaveFile.setOnClickListener { if(binding.tvResult.text.isNotBlank()) txtLauncher.launch("zakaz.txt") else toast("Пусто!") }
+        binding.btnSaveImage.setOnClickListener { if(binding.ivGeneratedResult.visibility == View.VISIBLE) imgLauncher.launch("ii_img.jpg") else toast("Нет фото!") }
 
-        // Кнопка: Генерация изображения (Бесплатный запрос через Cloudflare FLUX)
-        binding.btnGenerateImg.setOnClickListener {
-            binding.btnParse.visibility = View.GONE
-            val prompt = binding.etInputText.text.toString()
-            if (prompt.isNotBlank()) {
-                binding.btnGenerateImg.isEnabled = false
-                binding.btnGenerateImg.text = "ИИ рисует (Бесплатно)..."
-                Toast.makeText(this, "Запрос отправлен в Cloudflare FLUX", Toast.LENGTH_SHORT)
-                    .show()
-
-                lifecycleScope.launch {
-                    val bitmapResult = ImageGenerator.generateImage(this@MainActivity, prompt)
-                    if (bitmapResult != null) {
-                        binding.ivGeneratedResult.setImageBitmap(bitmapResult)
-                        binding.ivGeneratedResult.visibility = View.VISIBLE
-                        binding.btnSaveImage.visibility = View.VISIBLE
-                        Toast.makeText(
-                            this@MainActivity, "ИИ отрисовал картинку!", Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Не удалось получить картинку. Проверьте логи.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+        binding.btnOpenExcel.setOnClickListener {
+            lastSavedExcelUri?.let { u ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(u, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    binding.btnGenerateImg.isEnabled = true
-                    binding.btnGenerateImg.text = "Сгенерировать картинку ИИ"
-                }
-            } else {
-                Toast.makeText(this, "Введите описание в текстовое поле!", Toast.LENGTH_SHORT)
-                    .show()
-            }
+                    startActivity(intent)
+                } catch (e: Exception) { toast("Установите Excel для просмотра!") }
+            } ?: toast("Файл ещё не сохранён!")
         }
 
-        // Кнопка: "Сохранить картинку" (С выбором имени в системе)
-        binding.btnSaveImage.setOnClickListener {
-
-            if (binding.ivGeneratedResult.visibility == View.VISIBLE) {
-                createImageFileLauncher.launch("kartinka_ii.jpg")
-            } else {
-                Toast.makeText(this, "Сначала сгенерируйте изображение!", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        // Кнопка: Создание TXT файла таблицы в Download
-        binding.btnSaveFile.setOnClickListener {
-            val textToSave = binding.tvResult.text.toString()
-            if (textToSave.isNotBlank()) {
-                createTextFileLauncher.launch("zakaz_hleba.txt")
-            } else {
-                Toast.makeText(this, "Нечего сохранять! Таблица пуста.", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        // Кнопка: Копирование в буфер
         binding.btnCopy.setOnClickListener {
-            val textToCopy = binding.tvResult.text.toString()
-            if (textToCopy.isNotBlank()) {
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Bread Order", textToCopy)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(this, "Таблица скопирована в буфер!", Toast.LENGTH_SHORT).show()
-            }
+            val t = binding.tvResult.text.toString()
+            if (t.isBlank()) return@setOnClickListener toast("Нечего копировать!")
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Order", t))
+            toast("Скопировано!")
         }
 
-        // Кнопка: "Очистить всё"
         binding.btnClear.setOnClickListener {
-            binding.btnParse.visibility = View.VISIBLE
-            binding.etInputText.setText("")
-            binding.tvResult.text = ""
-            binding.layoutResult.visibility = View.GONE
-            binding.ivGeneratedResult.visibility = View.GONE
-            binding.btnSaveImage.visibility = View.GONE
-            Toast.makeText(this, "Экран полностью очищен!", Toast.LENGTH_SHORT).show()
+            binding.etInputText.setText(""); binding.tvResult.text = ""; lastOrder = null; lastSavedExcelUri = null
+            listOf(binding.layoutResult, binding.ivGeneratedResult, binding.btnSaveImage, binding.btnSaveExcel, binding.btnOpenExcel).forEach { it.visibility = View.GONE }
+            toast("Очищено!")
+        }
+
+        binding.btnGenerateImg.setOnClickListener {
+            val pr = binding.etInputText.text.toString()
+            if (pr.isBlank()) return@setOnClickListener toast("Введите описание!")
+            binding.btnGenerateImg.isEnabled = false; binding.btnGenerateImg.text = "Рисую..."
+            lifecycleScope.launch {
+                try {
+                    val b = ImageGenerator.generateImage(this@MainActivity, pr)
+                    if (b != null) { binding.ivGeneratedResult.setImageBitmap(b); binding.ivGeneratedResult.visibility = View.VISIBLE; binding.btnSaveImage.visibility = View.VISIBLE }
+                    else { toast("Ошибка картинки") }
+                } catch(e: Exception) { toast("Ошибка ИИ") }
+                finally {
+                    binding.btnGenerateImg.isEnabled = true; binding.btnGenerateImg.text = "Сгенерировать картинку"
+                    hideKeyboard() // ФОКУС: Прячем клаву сразу после того, как ИИ дорисовал
+                }
+            }
         }
     }
+
+    private fun hideKeyboard() {
+        val view = this.currentFocus
+        if (view != null) {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(view.windowToken, 0)
+        }
+    }
+
+    private fun saveBytes(u: android.net.Uri, b: ByteArray) = try { contentResolver.openOutputStream(u)?.use { it.write(b) }; toast("Сохранено!") } catch(e: Exception) { toast("Ошибка записи") }
+    private fun toggleExcelBtn(en: Boolean, t: String) { binding.btnSaveExcel.isEnabled = en; binding.btnSaveExcel.text = t }
+    private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_SHORT).show()
 }

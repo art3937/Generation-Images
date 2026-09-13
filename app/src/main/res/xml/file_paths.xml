@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Разрешаем доступ ко всему внешнему кэшу приложения -->
+    <external-cache-path name="external_cache_files" path="." />
+    <!-- На всякий случай оставляем и внутренний -->
+    <cache-path name="cache_files" path="." />
+</paths>
