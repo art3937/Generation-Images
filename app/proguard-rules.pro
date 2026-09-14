@@ -30,11 +30,17 @@
 -keep class com.google.mlkit.** { *; }
 -dontwarn com.google.mlkit.**
 
-# Apache POI
+# Apache POI & зависимости (эти классы только для Desktop Java)
 -keep class org.apache.poi.** { *; }
+-keep class org.apache.logging.log4j.** { *; }
 -dontwarn org.apache.poi.**
 -dontwarn org.apache.xmlbeans.**
+-dontwarn org.apache.logging.log4j.**
 -dontwarn com.zaxxer.**
+-dontwarn aQute.bnd.annotation.spi.**
+-dontwarn java.awt.**
+-dontwarn org.osgi.framework.**
+-dontwarn org.graphbuilder.**
 
 # AndroidX
 -keep class androidx.** { *; }
@@ -46,3 +52,4 @@
     public static *** v(...);
     public static *** i(...);
 }
+
