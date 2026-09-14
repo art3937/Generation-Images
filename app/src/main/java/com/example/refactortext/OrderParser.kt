@@ -36,32 +36,24 @@ object OrderParser {
         val exchangePositions = mutableListOf<Pair<String, Int>>()
 
         try {
-            // Очищаем от маркдаун-тегов
             var cleanText = jsonText
                 .replace("```json", "")
                 .replace("```", "")
                 .trim()
 
-            // Находим реальный старт массива
             val jsonStart = cleanText.indexOf('[')
             if (jsonStart == -1) {
                 Log.e(TAG, "[PARSE] Квадратная скобка [ не найдена")
                 return ParsedOrder(emptyList(), emptyList())
             }
 
-            // Отрезаем всё, что было ДО знака [
             cleanText = cleanText.substring(jsonStart).trim()
 
-            // ЖЕЛЕЗНЫЙ КОРРЕКТОР СКОБОК:
-            // Если текст не заканчивается на ], или обрезался — чиним вручную
             if (!cleanText.endsWith("]")) {
-                // Если в конце висит запятая — убираем её
                 if (cleanText.endsWith(",")) {
                     cleanText = cleanText.dropLast(1).trim()
                 }
-                // Если объект { открылся, но не закрылся }, дописываем скобку
                 if (cleanText.lastIndexOf('{') > cleanText.lastIndexOf('}')) {
-                    // Проверяем, не оборвалось ли поле на полуслове
                     if (cleanText.endsWith("\"") || cleanText.endsWith("заказ") || cleanText.endsWith("обмен")) {
                         cleanText += "\"}"
                     } else {
@@ -99,7 +91,6 @@ object OrderParser {
         return ParsedOrder(group(newPositions), group(exchangePositions))
     }
 
-
     private fun formatText(o: ParsedOrder): String {
         val sb = StringBuilder()
         sb.appendLine("ЗАКАЗ ПО НАИМЕНОВАНИЯМ")
@@ -116,7 +107,6 @@ object OrderParser {
             o.exchangePositions.forEach { sb.appendLine("${it.first} | ${it.second} шт.") }
         }
 
-        // Считаем итог строго по сгруппированному результату
         sb.appendLine("----------------------------------")
         sb.appendLine("ИТОГОВЫЙ ЗАКАЗ: ${o.totalNew} шт.")
         sb.appendLine("ИТОГОВЫЙ ОБМЕН: ${o.totalExchange} шт.")
@@ -125,19 +115,25 @@ object OrderParser {
         return sb.toString()
     }
 
-    // ── Основной метод ──────────────────────────────────────────────
-
     suspend fun parseTextWithAI(inputText: String): ParseResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "[REQUEST] Отправляю в ИИ текст:\n$inputText")
 
         val apiUrl = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
 
+        // ИСПРАВЛЕНО: gpt:// вместо yandexgpt://, без /latest
+        val modelUri = "gpt://${BuildConfig.YANDEX_FOLDER_ID}/yandexgpt-lite"
+
+        // ДИАГНОСТИКА: выводим итоговый URI в лог
+        Log.d(TAG, "[REQUEST] modelUri = $modelUri")
+        Log.d(TAG, "[REQUEST] YANDEX_FOLDER_ID = ${BuildConfig.YANDEX_FOLDER_ID}")
+        Log.d(TAG, "[REQUEST] YANDEX_API_KEY = ${BuildConfig.YANDEX_API_KEY?.take(6)}...")
+
         val jsonBody = JSONObject().apply {
-            put("modelUri", "gpt://${BuildConfig.YANDEX_FOLDER_ID}/yandexgpt-lite/latest")
+            put("modelUri", modelUri)
             put("completionOptions", JSONObject().apply {
                 put("stream", false)
                 put("temperature", 0.1)
-                put("maxTokens", "1500")
+                put("maxTokens", 1500)
             })
             put("messages", JSONArray().apply {
                 put(JSONObject().apply {
@@ -150,6 +146,8 @@ object OrderParser {
                 })
             })
         }
+
+        Log.d(TAG, "[REQUEST] Тело запроса:\n${jsonBody.toString(2)}")
 
         val body = jsonBody.toString()
             .toRequestBody("application/json; charset=utf-8".toMediaType())
