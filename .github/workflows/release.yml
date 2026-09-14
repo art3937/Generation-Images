@@ -25,18 +25,31 @@ jobs:
       - name: Grant execute permission to Gradle
         run: chmod +x ./gradlew
 
-      - name: Build APK
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PATH: app/release-keystore.jks
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          fi
+
+      - name: Build signed APK
+        env:
+          KEYSTORE_PATH: app/release-keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          # Магия: GitHub сам подставит уникальный номер сборки (например, v1.0.14, v1.0.15)
           tag_name: v1.0.${{ github.run_number }}
           name: "Релиз приложения v1.0.${{ github.run_number }} 🚀"
-          body: "Автоматический релиз. Код успешно пересобран в облаке через батник."
+          body: "Автоматический релиз. Код успешно пересобран и подписан в облаке."
           draft: false
           prerelease: false
-          files: app/build/outputs/apk/release/app-release-unsigned.apk
+          files: app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
