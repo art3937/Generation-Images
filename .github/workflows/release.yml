@@ -22,6 +22,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Grant execute permission to Gradle
+        run: chmod +x ./gradlew
+
+      - name: Build APK
+        run: ./gradlew assembleRelease
+
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -34,4 +40,3 @@ jobs:
           files: app/build/outputs/apk/release/app-release-unsigned.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
