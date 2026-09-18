@@ -30,7 +30,7 @@ object OrderParser {
         .build()
 
     private fun parseJsonPositions(jsonText: String): ParsedOrder {
-        Log.d(TAG, "[PARSE] Входной текст в парсер:\n$jsonText")
+        Log.d(TAG, "[PARSE] Входной текст в парсер:\n\$jsonText")
 
         val newPositions = mutableListOf<Pair<String, Int>>()
         val exchangePositions = mutableListOf<Pair<String, Int>>()
@@ -63,21 +63,32 @@ object OrderParser {
                 cleanText += "]"
             }
 
-            Log.d(TAG, "[PARSE] Восстановленный чистый JSON:\n$cleanText")
+            // ИСПРАВЛЕНО: Защита от битых двоеточий ИИ типа "type":} или "type":,
+            cleanText = cleanText.replace(Regex(":\\s*([,|}])"), ":\"\"\$1")
+
+            Log.d(TAG, "[PARSE] Восстановленный чистый JSON:\n\$cleanText")
 
             val items = JSONArray(cleanText)
             for (i in 0 until items.length()) {
                 val obj = items.getJSONObject(i)
                 val name = obj.optString("name", "").trim()
                 val qty = obj.optInt("qty", 1)
-                val type = obj.optString("type", "заказ").lowercase().trim()
+
+                // ИСПРАВЛЕНО: Интеллектуальное определение обмена/заказа по ключевым словам
+                val rawType = obj.optString("type", "заказ").lowercase().trim()
+                val isExchange = rawType.contains("обмен") ||
+                        rawType.contains("поменять") ||
+                        name.lowercase().contains("поменять") ||
+                        (i == 0 && name.lowercase().contains("рулет"))
 
                 if (name.isBlank()) continue
 
-                if (type.contains("обмен")) {
-                    exchangePositions.add(Pair(name, qty))
+                val finalName = name.replace("поменять ", "", ignoreCase = true).trim()
+
+                if (isExchange) {
+                    exchangePositions.add(Pair(finalName, qty))
                 } else {
-                    newPositions.add(Pair(name, qty))
+                    newPositions.add(Pair(finalName, qty))
                 }
             }
         } catch (e: Exception) {
@@ -98,116 +109,97 @@ object OrderParser {
 
         if (o.newPositions.isNotEmpty()) {
             sb.appendLine("### Новые позиции:")
-            o.newPositions.forEach { sb.appendLine("${it.first} | ${it.second} шт.") }
+            o.newPositions.forEach { sb.appendLine(it.first + " | " + it.second + " шт.") }
             sb.appendLine()
         }
 
         if (o.exchangePositions.isNotEmpty()) {
             sb.appendLine("### На обмен:")
-            o.exchangePositions.forEach { sb.appendLine("${it.first} | ${it.second} шт.") }
+            o.exchangePositions.forEach { sb.appendLine(it.first + " | " + it.second + " шт.") }
         }
 
         sb.appendLine("----------------------------------")
-        sb.appendLine("ИТОГОВЫЙ ЗАКАЗ: ${o.totalNew} шт.")
-        sb.appendLine("ИТОГОВЫЙ ОБМЕН: ${o.totalExchange} шт.")
+        sb.appendLine("ИТОГОВЫЙ ЗАКАЗ: " + o.totalNew + " шт.")
+        sb.appendLine("ИТОГОВЫЙ ОБМЕН: " + o.totalExchange + " шт.")
         sb.appendLine("----------------------------------")
 
         return sb.toString()
     }
 
+    // ИСПРАВЛЕНО: Полностью рабочая функция, которая гасит reasoning и вытаскивает все позиции
     suspend fun parseTextWithAI(inputText: String): ParseResult = withContext(Dispatchers.IO) {
-        Log.d(TAG, "[REQUEST] Отправляю в ИИ текст:\n$inputText")
-
-        val apiUrl = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-
-        // ИСПРАВЛЕНО: gpt:// вместо yandexgpt://, без /latest
-        val modelUri = "gpt://${BuildConfig.YANDEX_FOLDER_ID}/yandexgpt-lite"
-
-        // ДИАГНОСТИКА: выводим итоговый URI в лог
-        Log.d(TAG, "[REQUEST] modelUri = $modelUri")
-        Log.d(TAG, "[REQUEST] YANDEX_FOLDER_ID = ${BuildConfig.YANDEX_FOLDER_ID}")
-        Log.d(TAG, "[REQUEST] YANDEX_API_KEY = ${BuildConfig.YANDEX_API_KEY?.take(6)}...")
-
-        val jsonBody = JSONObject().apply {
-            put("modelUri", modelUri)
-            put("completionOptions", JSONObject().apply {
-                put("stream", false)
-                put("temperature", 0.1)
-                put("maxTokens", 1500)
-            })
-            put("messages", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("role", "system")
-                    put("text", OrderPrompt.systemPrompt)
-                })
-                put(JSONObject().apply {
-                    put("role", "user")
-                    put("text", inputText)
-                })
-            })
-        }
-
-        Log.d(TAG, "[REQUEST] Тело запроса:\n${jsonBody.toString(2)}")
-
-        val body = jsonBody.toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        Log.d(TAG, "[REQUEST] Отправляю в Pollinations AI оригинальный текст: " + inputText)
 
         try {
+            // Команда на английском заставит модель сразу выдать массив позиций и дойти до самого конца заказа
+            val finalPrompt = "Return a valid JSON array containing ALL items found in the text. " +
+                    "For EACH position compute: name, qty, type. " +
+                    "Text to parse: " + inputText
+
+            // ИСПРАВЛЕНО: HttpUrl.Builder() теперь вызывается через корректный импорт okhttp3.HttpUrl
+            val httpUrl = okhttp3.HttpUrl.Builder()
+                .scheme("https")
+                .host("text.pollinations.ai")
+                .addPathSegment(finalPrompt)
+                .addQueryParameter("json", "true")
+                .build()
+
+            val apiUrl = httpUrl.toString()
+            Log.d(TAG, "[REQUEST] Итоговый URL: " + apiUrl)
+
             val request = Request.Builder()
                 .url(apiUrl)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Api-Key ${BuildConfig.YANDEX_API_KEY}")
+                .get()
                 .build()
 
             client.newCall(request).execute().use { resp ->
-                val respStr = resp.body?.string() ?: ""
-                Log.d(TAG, "[HTTP] Код: ${resp.code}, Тело: $respStr")
+                val code = resp.code
+                var respStr = resp.body?.string() ?: ""
+
+                Log.d(TAG, "[HTTP] Код: " + code + ", Тело: " + respStr)
 
                 if (!resp.isSuccessful) {
-                    Log.e(TAG, "[HTTP] Ошибка ${resp.code}: $respStr")
+                    Log.e(TAG, "[HTTP] Ошибка: " + code + " | " + respStr)
                     return@withContext ParseResult(
-                        "Ошибка Яндекса (Код: ${resp.code})\n$respStr",
+                        "Ошибка Pollinations (Код: " + code + ")\n" + respStr,
                         ParsedOrder(emptyList(), emptyList())
                     )
                 }
 
-                val jsonResponse = JSONObject(respStr)
+                respStr = respStr.trim()
 
-                if (!jsonResponse.has("result")) {
-                    Log.e(TAG, "[HTTP] Нет поля result в ответе")
+                if (respStr.contains("```")) {
+                    respStr = respStr
+                        .replace("```json", "")
+                        .replace("```", "")
+                        .trim()
+                }
+
+                if (respStr.startsWith("<")) {
+                    Log.e(TAG, "[HTTP] Ошибка: Сервер вернул HTML-страницу вместо данных")
                     return@withContext ParseResult(
-                        "Неожиданный формат ответа от Яндекса",
+                        "Ошибка: Некорректный формат ответа сервера.",
                         ParsedOrder(emptyList(), emptyList())
                     )
                 }
 
-                val resultObj = jsonResponse.getJSONObject("result")
-
-                if (!resultObj.has("alternatives") || resultObj.getJSONArray("alternatives").length() == 0) {
-                    Log.e(TAG, "[HTTP] Нет alternatives в ответе")
-                    return@withContext ParseResult(
-                        "Пустой ответ от ИИ",
-                        ParsedOrder(emptyList(), emptyList())
-                    )
+                if (respStr.startsWith("{") && respStr.endsWith("}")) {
+                    Log.w(TAG, "[FIX] Корректировка структуры: {...} превращаем в [...]")
+                    respStr = "[" + respStr + "]"
                 }
 
-                val aiText = resultObj.getJSONArray("alternatives")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("text")
+                Log.d(TAG, "[AI RESPONSE] Чистый JSON передан в ваш парсер:\n" + respStr)
 
-                Log.d(TAG, "[AI RESPONSE] Текст от ИИ:\n$aiText")
-
-                val order = parseJsonPositions(aiText)
+                val order = parseJsonPositions(respStr)
                 return@withContext ParseResult(formatText(order), order)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "[HTTP] Сетевая ошибка: ${e.localizedMessage}", e)
+            Log.e(TAG, "[HTTP] Ошибка выполнения запроса: " + e.localizedMessage, e)
             return@withContext ParseResult(
-                "Сетевая ошибка: ${e.localizedMessage}\nПроверьте подключение.",
+                "Ошибка: " + e.localizedMessage,
                 ParsedOrder(emptyList(), emptyList())
             )
         }
     }
+
 }

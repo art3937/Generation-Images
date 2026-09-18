@@ -25,8 +25,8 @@ object ProxyManager {
 
     // Клиент без прокси для выкачивания баз
     private val directClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .proxy(Proxy.NO_PROXY)
         .build()
 
