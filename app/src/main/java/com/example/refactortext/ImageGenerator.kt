@@ -6,180 +6,198 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.InetSocketAddress
 import java.net.Proxy
-import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
 
 object ImageGenerator {
 
-    private const val TAG = "BREAD_PARSER_LOG"
-    private const val MAX_RETRIES = 3
+    private const val TAG = "IMAGE_LOG"
 
-    private const val STABLE_PROXY_HOST = "45.43.60.220"
-    private const val STABLE_PROXY_PORT = 8080
-    val proxyAddress = InetSocketAddress(STABLE_PROXY_HOST, STABLE_PROXY_PORT)
-    val appProxy = Proxy(Proxy.Type.HTTP, proxyAddress)
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(45, TimeUnit.SECONDS)   // больше на медленных сетях
-        .readTimeout(50, TimeUnit.SECONDS)      // генерация может быть долгой
-        .proxy(appProxy)
+    // Базовый чистый клиент (основа для динамического подкидывания прокси)
+    private val baseClient = OkHttpClient.Builder()
         .build()
 
-    // Отдельный клиент БЕЗ прокси для аварийного прямого обхода
+    // Прямой клиент без прокси для аварийного режима
     private val directClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        //.proxy(Proxy.NO_PROXY)
         .proxy(Proxy.NO_PROXY)
         .build()
 
-    private val mutexMap = mutableMapOf<String, Mutex>()
+    suspend fun generateImage(
+        context: Context,
+        russianPrompt: String,
+    ): Bitmap? = withContext(Dispatchers.IO) {
 
-    private fun sha256(input: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
+        Log.d(TAG, "[IMAGE] ---> СТАРТ ПЕРЕВОДА для '$russianPrompt'.")
 
-    suspend fun generateImage(context: Context, russianPrompt: String): Bitmap? =
-        withContext(Dispatchers.IO) {
+        val englishPrompt = try {
+            TextTranslator.translateRuToEn(russianPrompt)
+        } catch (e: Exception) {
+            Log.e(TAG, "[IMAGE] Ошибка перевода: ${e.localizedMessage}")
+            russianPrompt
+        }
+        Log.e(TAG, "[IMAGE] переведено: $englishPrompt")
 
-            // ЛОГИРОВАНИЕ ПЕРЕВОДА
-            Log.d(TAG, "[IMAGE] ---> СТАРТ ПЕРЕВОДА. Исходный текст: $russianPrompt")
-            val correctedPrompt = TextAutoCorrector.correctText(russianPrompt)
-
-            val englishPrompt = try {
-                Log.d(TAG, "[IMAGE] Перевод промпта: \"$correctedPrompt\"")
-                TextTranslator.translateRuToEn(correctedPrompt)
-            } catch (e: Exception) {
-                Log.e(TAG, "[IMAGE] Ошибка перевода: ${e.localizedMessage}. Используем исправленный русский.")
-                correctedPrompt
-            }
+        val enhancedPrompt = "$englishPrompt, highly detailed, photorealistic, cinematic lighting, sharp focus"
 
 
-            //val enhancedPrompt = "$englishPrompt, highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
-            val enhancedPrompt = "$englishPrompt. High quality, clear details, well-defined shapes, rich colors."
+        var attempt = 1
+        var isGenerated = false
+        var finalBitmap: Bitmap? = null
 
-
-            // Уникальный идентификатор запроса для синхронизации потоков (вместо имени файла кэша)
-            val requestKey = sha256(enhancedPrompt)
-
-            val mutex = synchronized(mutexMap) {
-                mutexMap.getOrPut(requestKey) { Mutex() }
-            }
-
+        // НАСТОЯЩИЙ ЧЕСТНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ ЧЕРЕЗ УПРАВЛЯЕМЫЙ ФЛАГ
+        while (!isGenerated) {
             try {
-                mutex.withLock {
-                    // Генерация с ретраями
-                    var lastError: Exception? = null
-                    for (attempt in 1..MAX_RETRIES) {
-                        try {
-                            val randomSeed = (1..100_000).random()
-                            val targetUrl = HttpUrl.Builder()
-                                .scheme("https")
-                                .host("image.pollinations.ai")
-                                .addPathSegment("p")
-                                .addPathSegment(enhancedPrompt)
-                                .addQueryParameter("width", "512")
-                                .addQueryParameter("height", "512")
-                                .addQueryParameter("model", "flux")
-                                .addQueryParameter("seed", randomSeed.toString())
-                                .addQueryParameter("nologo", "true")
-                                .build()
+                val randomSeed = (1..100_000).random()
+                val targetUrl = HttpUrl.Builder()
+                    .scheme("https")
+                    .host("image.pollinations.ai")
+                    .addPathSegment("p")
+                    .addPathSegment(enhancedPrompt)
+                    .addQueryParameter("width", "1024")
+                    .addQueryParameter("height", "1024")
+                    .addQueryParameter("model", "flux")
+                    .addQueryParameter("seed", randomSeed.toString())
+                    .addQueryParameter("nologo", "true")
+                    .build()
 
-                            Log.d(TAG, "[IMAGE] Попытка $attempt/$MAX_RETRIES через ПРОКСИ ($STABLE_PROXY_HOST). URL: $targetUrl")
+                // Получаем абсолютно новый прокси на круг
+                val currentProxy = ProxyManager.getProxyForAttempt(attempt)
+                Log.d(TAG, "[PROXY] Попытка $attempt. Запуск через прокси: $currentProxy")
 
-                            var bytes: ByteArray? = null
+                // Агрессивные таймауты: 4 секунды на коннект, 6 на чтение.
+                val dynamicClient = baseClient.newBuilder()
+                    .proxy(currentProxy)
+                    .connectTimeout(20, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+                    .build()
 
-                            // 1. Попытка запроса через основной клиент с ПРОКСИ
-                            try {
-                                bytes = client.newCall(generateRequest(targetUrl)).execute().use { response ->
-                                    if (!response.isSuccessful) {
-                                        Log.e(TAG, "[IMAGE] ОШИБКА ПРОКСИ: HTTP ${response.code} (попытка $attempt)")
-                                        return@use null
-                                    }
-                                    val body = response.body ?: run {
-                                        Log.w(TAG, "[IMAGE] ПРОКСИ ОК, но тело ответа пустое.")
-                                        return@use null
-                                    }
-                                    val rawBytes = body.bytes()
-                                    if (rawBytes.isEmpty()) return@use null
+                Log.d(TAG, "[IMAGE] '$russianPrompt'. Попытка $attempt. URL: $targetUrl")
 
-                                    // Проверка на Cloudflare HTML заглушки вместо картинки
-                                    if (rawBytes.size < 500_000) {
-                                        val textCheck = String(rawBytes, Charsets.UTF_8)
-                                        if (textCheck.trim().startsWith("<!DOCTYPE") || textCheck.contains("<html")) {
-                                            Log.e(TAG, "[IMAGE] ОШИБКА ПРОКСИ: Сбой! Скачался HTML вместо картинки: ${textCheck.take(200)}")
-                                            return@use null
-                                        }
-                                    }
-                                    Log.i(TAG, "[IMAGE] УСПЕШНО СКАЧАНО ЧЕРЕЗ ПРОКСИ! Размер: ${rawBytes.size} байт.")
-                                    rawBytes
-                                }
-                            } catch (proxyException: Exception) {
-                                Log.w(TAG, "[IMAGE] СБОЙ СЕТИ ПРОКСИ на попытке $attempt: ${proxyException.localizedMessage}")
-                            }
+                var bytes: ByteArray? = null
 
-                            // 2. АВАРИЙНЫЙ ОБХОД НАПРЯМУЮ БЕЗ ПРОКСИ (если прокси выдал null или упал)
-                            if (bytes == null) {
-                                Log.w(TAG, "[АВАРИЙНЫЙ РЕЖИМ] Прокси подвёл. Пробуем скачать НАПРЯМУЮ без прокси...")
-                                try {
-                                    bytes = directClient.newCall(generateRequest(targetUrl)).execute().use { response ->
-                                        if (!response.isSuccessful) {
-                                            Log.e(TAG, "[IMAGE] ОШИБКА НАПРЯМУЮ: HTTP ${response.code}")
-                                            return@use null
-                                        }
-                                        val body = response.body ?: return@use null
-                                        val rawBytes = body.bytes()
-                                        if (rawBytes.isNotEmpty()) {
-                                            Log.i(TAG, "[IMAGE] УСПЕШНО СКАЧАНО НАПРЯМУЮ БЕЗ ПРОКСИ! Размер: ${rawBytes.size} байт.")
-                                            rawBytes
-                                        } else null
-                                    }
-                                } catch (directException: Exception) {
-                                    Log.e(TAG, "[IMAGE] Крах прямого подключения: ${directException.localizedMessage}")
-                                }
-                            }
-
-                            // 3. Обработка успешного массива байт (из любого источника) и мгновенный возврат Bitmap
-                            if (bytes != null) {
-                                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                if (bitmap != null) {
-                                    Log.d(TAG, "[IMAGE] Изображение успешно декодировано в Bitmap в RAM.")
-                                    return@withContext bitmap
-                                }
-                            }
-
-                            if (attempt < MAX_RETRIES) delay(2000L * attempt)
-                        } catch (e: Exception) {
-                            lastError = e
-                            Log.e(TAG, "[IMAGE] Общий сбой итерации $attempt: ${e.localizedMessage}")
-                            if (attempt < MAX_RETRIES) delay(2000L * attempt)
+                // 1. Попытка запроса через динамический ПРОКСИ
+                try {
+                    val req = generateRequest(targetUrl, attempt)
+                    bytes = dynamicClient.newCall(req).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            Log.w(TAG, "[IMAGE] Прокси HTTP Код ошибки: ${response.code}. Меняем IP.")
+                            ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                            return@use null
                         }
+                        val body = response.body ?: return@use null
+                        val rawBytes = body.bytes()
+                        if (rawBytes.isEmpty()) return@use null
+
+                        // Проверка Cloudflare (HTML-заглушки)
+                        if (rawBytes.size < 500_000) {
+                            val str = String(rawBytes, Charsets.UTF_8)
+                            if (str.trim().startsWith("<!DOCTYPE") || str.contains("<html")) {
+                                Log.w(TAG, "[IMAGE] Прокси выдал HTML-заглушку от Cloudflare.")
+                                ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                                return@use null
+                            }
+                        }
+
+                        ProxyManager.reportProxyStatus(currentProxy, isSuccess = true)
+                        rawBytes
+                    }
+                } catch (proxyException: Exception) {
+                    Log.w(TAG, "[IMAGE] Сбой сети текущего прокси на попытке $attempt: ${proxyException.message}")
+                    ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                }
+
+                // 2. АВАРИЙНЫЙ ОБХОД НАПРЯМУЮ (С жестким перехватом корутины)
+                if (bytes == null) {
+                    try {
+                        Log.w(TAG, "[IMAGE] Аварийный режим напрямую без прокси для попытки $attempt...")
+
+                        // ЖЕСТКИЙ ЛИМИТ: Если Cloudflare начнет тянуть время, корутина убьет его ровно через 3 секунды
+                        bytes = kotlinx.coroutines.withTimeout(3000L.milliseconds) {
+                            val req = generateRequest(targetUrl, attempt)
+                            directClient.newCall(req).execute().use { response ->
+                                if (!response.isSuccessful) return@use null
+                                val body = response.body ?: return@use null
+                                val rawBytes = body.bytes()
+
+                                if (rawBytes.size < 500_000) {
+                                    val str = String(rawBytes, Charsets.UTF_8)
+                                    if (str.trim().startsWith("<!DOCTYPE") || str.contains("<html")) {
+                                        return@use null
+                                    }
+                                }
+                                if (rawBytes.isNotEmpty()) rawBytes else null
+                            }
+                        }
+                    } catch (timeoutEx: kotlinx.coroutines.TimeoutCancellationException) {
+                        // Ловим зависание Cloudflare и мгновенно идем дальше
+                        Log.e(TAG, "[IMAGE] Аварийный режим напрямую ЗАВИС намертво. Корутина принудительно сбросила его.")
+                    } catch (directException: Exception) {
+                        Log.e(TAG, "[IMAGE] Крах прямого подключения: ${directException.message}")
+                    }
+                }
+
+
+                // 3. Сборка Bitmap в максимальном качестве
+                if (bytes != null) {
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inScaled = false
                     }
 
-                    Log.e(TAG, "[IMAGE] Все попытки исчерпаны. Последняя ошибка: ${lastError?.localizedMessage}")
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    if (bitmap != null) {
+                        Log.d(TAG, "[IMAGE] УСПЕХ! Картинка получена в RAM.")
+                        finalBitmap = bitmap
+                        isGenerated = true // Успешно выходим из цикла
+                    }
                 }
+
             } catch (e: Exception) {
-                Log.e(TAG, "[IMAGE] Крах внутри блокировки: ${e.localizedMessage}", e)
-            } finally {
-                synchronized(mutexMap) { mutexMap.remove(requestKey) }
+                Log.e(TAG, "[IMAGE] Критический сбой итерации $attempt: ${e.message}")
             }
 
-            return@withContext null
-        }
+            // === БЫСТРАЯ ЗАДЕРЖКА ПЕРЕД СЛЕДУЮЩЕЙ ИТЕРАЦИЕЙ (если картинка еще не сгенерирована) ===
+            if (!isGenerated) {
+                attempt++
+                val delayTime = when (attempt) {
+                    2 -> 1500L
+                    3 -> 3000L
+                    else -> 5000L
+                }
+                Log.w(TAG, "[IMAGE] Переключаемся на следующий прокси через $delayTime мс на попытку $attempt")
+                delay(delayTime)
+            }
+        } // Конец while
 
-    private fun generateRequest(targetUrl: HttpUrl): Request =
-        Request.Builder()
+        // ИСПРАВЛЕНО: Четкий и гарантированный возврат объекта для компилятора
+        return@withContext finalBitmap
+    }
+
+    // ВАШ МЕТОД: Генерация запроса с ротацией User-Agent
+    private fun generateRequest(targetUrl: okhttp3.HttpUrl, attempt: Int): Request {
+        val userAgents = listOf(
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            "Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36"
+        )
+        val selectedAgent = userAgents[attempt % userAgents.size]
+
+        return Request.Builder()
             .url(targetUrl)
-            .addHeader("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+            .addHeader("User-Agent", selectedAgent)
+            .addHeader("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+            .addHeader("Accept-Language", "en-US,en;q=0.9")
             .get()
             .build()
+    }
 }

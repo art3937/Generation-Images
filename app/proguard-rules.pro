@@ -4,6 +4,25 @@
 -keep public class com.example.refactortext.** {
     public *;
     protected *;
+    private *;
+    <init>(...);
+}
+
+# Явно сохраняем MainActivity и все Activity
+-keep class com.example.refactortext.MainActivity {
+    public <init>(...);
+    public void onCreate(...);
+    public void onResume();
+    public void onPause();
+    public void onDestroy();
+}
+
+-keep class * extends android.app.Activity {
+    public <init>(...);
+}
+
+-keep class * extends androidx.appcompat.app.AppCompatActivity {
+    public <init>(...);
 }
 
 # OkHttp
@@ -17,6 +36,7 @@
     <fields>;
 }
 -keep class kotlin.Metadata { *; }
+-keep class kotlin.** { *; }
 
 # Google AI SDK (Gemini)
 -keep class com.google.ai.** { *; }
@@ -25,6 +45,7 @@
 # Kotlinx Serialization
 -keepclassmembers class kotlinx.serialization.** { *; }
 -dontwarn kotlinx.serialization.**
+-keep class kotlinx.** { *; }
 
 # ML Kit
 -keep class com.google.mlkit.** { *; }
@@ -44,6 +65,7 @@
 
 # AndroidX
 -keep class androidx.** { *; }
+-keep interface androidx.** { *; }
 -dontwarn androidx.**
 
 # Remove logging
@@ -53,3 +75,11 @@
     public static *** i(...);
 }
 
+# Viewbinding
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+-keepclassmembers class * {
+    *** *Binding(...);
+}

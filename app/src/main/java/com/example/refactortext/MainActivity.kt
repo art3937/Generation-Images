@@ -4,6 +4,7 @@ import android.content.*
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -12,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.refactortext.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -44,6 +46,16 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // ЗАПУСКАТЕЛЬ ДЯТЛА: Качаем базу один раз при старте приложения
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                Log.d("BREAD_PARSER_LOG", "[PROXY] Инициализация прокси-базы при старте приложения...")
+                ProxyManager.fetchFreshProxies()
+            } catch (e: Exception) {
+                Log.e("BREAD_PARSER_LOG", "[PROXY] Сбой предзагрузки баз: ${e.message}")
+            }
+        }
         binding = ActivityMainBinding.inflate(layoutInflater).also { setContentView(it.root) }
 
         binding.btnParse.setOnClickListener {
