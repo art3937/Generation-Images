@@ -26,12 +26,10 @@ object ImageGenerator {
     private val directClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
-        //.proxy(Proxy.NO_PROXY)
         .proxy(Proxy.NO_PROXY)
         .build()
 
     suspend fun generateImage(
-        context: Context,
         russianPrompt: String,
     ): Bitmap? = withContext(Dispatchers.IO) {
 
@@ -68,15 +66,14 @@ object ImageGenerator {
                     .addQueryParameter("nologo", "true")
                     .build()
 
-                // Получаем абсолютно новый прокси на круг
+
                 val currentProxy = ProxyManager.getProxyForAttempt(attempt)
                 Log.d(TAG, "[PROXY] Попытка $attempt. Запуск через прокси: $currentProxy")
 
-                // Агрессивные таймауты: 4 секунды на коннект, 6 на чтение.
                 val dynamicClient = baseClient.newBuilder()
                     .proxy(currentProxy)
                     .connectTimeout(20, TimeUnit.SECONDS)
-                    .readTimeout(20, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.SECONDS)
                     .build()
 
                 Log.d(TAG, "[IMAGE] '$russianPrompt'. Попытка $attempt. URL: $targetUrl")
@@ -120,7 +117,7 @@ object ImageGenerator {
                         Log.w(TAG, "[IMAGE] Аварийный режим напрямую без прокси для попытки $attempt...")
 
                         // ЖЕСТКИЙ ЛИМИТ: Если Cloudflare начнет тянуть время, корутина убьет его ровно через 3 секунды
-                        bytes = kotlinx.coroutines.withTimeout(3000L.milliseconds) {
+                        bytes = kotlinx.coroutines.withTimeout(1000L.milliseconds) {
                             val req = generateRequest(targetUrl, attempt)
                             directClient.newCall(req).execute().use { response ->
                                 if (!response.isSuccessful) return@use null

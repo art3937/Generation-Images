@@ -30,7 +30,7 @@ object OrderParser {
         .build()
 
     private fun parseJsonPositions(jsonText: String): ParsedOrder {
-        Log.d(TAG, "[PARSE] Входной текст в парсер:\n\$jsonText")
+        Log.d(TAG, "[PARSE] Входной текст в парсер:$jsonText")
 
         val newPositions = mutableListOf<Pair<String, Int>>()
         val exchangePositions = mutableListOf<Pair<String, Int>>()
@@ -66,7 +66,7 @@ object OrderParser {
             // ИСПРАВЛЕНО: Защита от битых двоеточий ИИ типа "type":} или "type":,
             cleanText = cleanText.replace(Regex(":\\s*([,|}])"), ":\"\"\$1")
 
-            Log.d(TAG, "[PARSE] Восстановленный чистый JSON:\n\$cleanText")
+            Log.d(TAG, "[PARSE] Восстановленный чистый JSON: $cleanText")
 
             val items = JSONArray(cleanText)
             for (i in 0 until items.length()) {

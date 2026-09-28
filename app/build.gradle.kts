@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // === ЧТЕНИЕ КЛЮЧЕЙ ИЗ LOCAL.PROPERTIES (Вынесено на самый верх) ===
@@ -14,12 +15,12 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.example.refactortext"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.refactortext"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -77,8 +78,15 @@ android {
     }
 
     buildFeatures {
+        // Включаем поддержку Jetpack Compose в проекте
+        compose = true
         viewBinding = true
         buildConfig = true // Включает автогенерацию класса BuildConfig
+    }
+
+    composeOptions {
+        // Указываем версию компилятора (для современных версий Kotlin используется актуальный Compiler Extension)
+        kotlinCompilerExtensionVersion = "1.5.15"
     }
 }
 
@@ -109,4 +117,17 @@ dependencies {
     // POI для Excel (современная версия)
     implementation("org.apache.poi:poi:5.2.5")
     implementation("org.apache.poi:poi-ooxml:5.2.5")
+
+    // Базовая интеграция Compose в Activity (исправляет Unresolved reference 'compose')
+    implementation("androidx.activity:activity-compose:1.9.3")
+
+    // Основной инструментарий Compose (блоки, тексты, разметка)
+    implementation(platform("androidx.compose:compose-bom:2026.09.00")) // Управляет версиями Compose
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Материальный дизайн (кнопки, карточки) и ViewModel (из прошлого шага)
+    implementation("androidx.compose.material3:material3:1.3.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 }
