@@ -73,7 +73,7 @@
                 android:layout_weight="0.9"
                 android:layout_marginRight="6dp"
                 android:backgroundTint="#CFD8DC"
-                android:text="❌ ОЧИСТИТЬ"
+                android:text="❌ ОЧИСТИТЬ ВСЕ"
                 android:textColor="#37474F"
                 android:textSize="12sp"
                 app:cornerRadius="8dp" />
@@ -89,6 +89,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 app:cornerRadius="8dp" />
+
         </LinearLayout>
 
         <!-- Блок работы с картинкой ИИ -->

@@ -1,7 +1,6 @@
 package com.example.refactortext
 
 
-import OrderViewModel
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -29,12 +28,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 // Scaffold автоматически обрабатывает системные отступы (Edge-to-Edge Padding)
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    // 👈 ЗАДАЕМ ПРАВИЛЬНЫЙ ФОН ДЛЯ ВСЕГО ЭКРАНА (Мягкий светло-серый оттенок)
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ) { innerPadding ->
                     OrderScreen(
                         viewModel = viewModel,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
+
             }
         }
     }

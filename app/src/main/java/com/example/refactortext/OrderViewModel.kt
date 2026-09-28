@@ -1,3 +1,5 @@
+package com.example.refactortext
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -9,10 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.refactortext.ImageGenerator
-import com.example.refactortext.OrderExcelExporter
-import com.example.refactortext.OrderParser
-import com.example.refactortext.ProxyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -138,4 +136,6 @@ class OrderViewModel : ViewModel() {
         lastOrder = null
         onToast("Очищено!")
     }
+
+
 }

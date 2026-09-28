@@ -1,30 +1,51 @@
 package com.example.refactortext
 
-import OrderViewModel
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.compose.runtime.getValue
 import android.widget.Toast
+import com.airbnb.lottie.compose.rememberLottieAnimatable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.refactortext.MainActivity
+import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.rememberLottieComposition
+import kotlinx.coroutines.launch
 
 @Composable
 fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     // Получаем текущий Context Android внутри Compose-функции
     val context = LocalContext.current
+
+    val coroutineScope = rememberCoroutineScope() // 👈 Добавляем эту строчку
+
 
     // FocusManager отвечает за фокус элементов ввода. С его помощью мы будем скрывать клавиатуру.
     val focusManager = LocalFocusManager.current
@@ -65,83 +86,134 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     ) {
 
         // Поле ввода текста (Заменяет EditText)
-        OutlinedTextField(
-            value = viewModel.inputText,
-            onValueChange = { viewModel.inputText = it }, // При вводе символа обновляем текст во ViewModel
-            label = { Text("Введите текст заказа или описание для ИИ") },
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 6
-        )
+        Surface( // 👈 Оборачиваем в Surface, чтобы придать форму и контрастный белый цвет
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest, // 👈 Чисто белый фон плашки
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)), // 👈 Едва заметная тонкая серая граница
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            TextField(
+                value = viewModel.inputText,
+                onValueChange = { viewModel.inputText = it },
+                placeholder = {
+                    Text(
+                        text = "Текст заказа или описание для ИИ...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                maxLines = 6,
+                colors = TextFieldDefaults.colors(
+                    // Делаем контейнер самого поля прозрачным, так как белый цвет уже задан слоем Surface выше
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
+            )
+        }
+
+
+
 
         // Горизонтальный блок с 3 главными кнопками управления
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Кнопка Парсинга
-            Button(
-                onClick = {
-                    focusManager.clearFocus() // Убираем фокус — клавиатура прячется АВТОМАТИЧЕСКИ
-                    viewModel.parseText(showToast)
-                },
-                modifier = Modifier.weight(1f), // Занимает равную долю пространства в строке
-                enabled = !viewModel.isParsing  // Заморозить кнопку во время отправки запроса
-            ) {
-                Text(if (viewModel.isParsing) "Считаю..." else "РАСПРЕДЕЛИТЬ")
+            // Кнопка 1: РАСПРЕДЕЛИТЬ
+            AnimatedButton(
+                text = "РАСПРЕДЕЛИТЬ",
+                loadingText = "Считаю...",
+                isLoading = viewModel.isParsing,
+                onClick = { focusManager.clearFocus(); viewModel.parseText(showToast) },
+                modifier = Modifier.weight(1.3f)
+            )
+
+            // Кнопка 2: КАРТИНКА ИИ
+            AnimatedButton(
+                text = "КАРТИНКА ИИ",
+                loadingText = "Рисую...",
+                isLoading = viewModel.isGeneratingImage,
+                onClick = { focusManager.clearFocus(); viewModel.generateImage(showToast) },
+                modifier = Modifier.weight(1.1f),
+                isSecondary = true
+            )
+
+// 1. Создаем профессиональный и стабильный аниматор Lottie
+            val lottieAnimatable = rememberLottieAnimatable()
+
+// 2. Загружаем саму анимацию из папки raw
+            val deleteComposition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.delete_anim))
+
+// 3. Используем LaunchedEffect. Он следит за состоянием: как только запускается анимация,
+// мы дожидаемся её полного завершения и только потом надежно очищаем экран.
+            LaunchedEffect(lottieAnimatable.progress) {
+                if (lottieAnimatable.progress == 1f) {
+                    viewModel.clearAll(showToast) // Очищаем текстовые поля строго в конце анимации
+                    lottieAnimatable.snapTo(composition = deleteComposition, progress = 0f) // Сбрасываем мусорку в начальный кадр
+                }
             }
 
-            // Кнопка генерации изображения нейросетью
-            Button(
+// 4. Крупная и отзывчивая мусорка-кнопка
+            IconButton(
                 onClick = {
-                    focusManager.clearFocus() // Скрываем клавиатуру
-                    viewModel.generateImage(showToast)
+                    coroutineScope.launch {
+                        lottieAnimatable.animate(
+                            composition = deleteComposition,
+                            iterations = 1,
+                            continueFromPreviousAnimate = false
+                        )
+                    }
                 },
-                modifier = Modifier.weight(1f),
-                enabled = !viewModel.isGeneratingImage
+                modifier = Modifier.size(100.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.error
+                )
             ) {
-                Text(if (viewModel.isGeneratingImage) "Рисую..." else "КАРТИНКА ИИ")
+                LottieAnimation(
+                    composition = deleteComposition,
+                    progress = { lottieAnimatable.progress },
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.size(180.dp)
+                )
             }
 
-            // Кнопка сброса
-            Button(
-                onClick = { viewModel.clearAll(showToast) },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) // Красный цвет ошибки
-            ) {
-                Text("ОЧИСТИТЬ")
-            }
+
         }
+
 
         // Блок вывода результатов от ИИ (Условный рендеринг: если текста нет — элемент вообще не создается в памяти)
         if (viewModel.isResultVisible) {
-            Card(
+            ElevatedCard( // 👈 Вместо Card используем ElevatedCard
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                shape = RoundedCornerShape(16.dp), // 👈 Современное крупное скругление углов
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow // 👈 Профессиональный мягкий фон
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp) // 👈 Идеально просчитанная тень
             ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Текст ответа
-                    Text(text = viewModel.resultText, style = MaterialTheme.typography.bodyMedium)
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = viewModel.resultText, style = MaterialTheme.typography.bodyLarge)
 
-                    // Кнопки взаимодействия с текстом результата
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.copyToClipboard(context, showToast) },
-                            modifier = Modifier.weight(1f)
-                        ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
+                        ElevatedButton(onClick = { viewModel.copyToClipboard(context, showToast) }, modifier = Modifier.weight(1f)) {
                             Text("Копировать")
                         }
-                        Button(
-                            onClick = { txtLauncher.launch("zakaz.txt") },
-                            modifier = Modifier.weight(1f)
-                        ) {
+                        ElevatedButton(onClick = { txtLauncher.launch("zakaz.txt") }, modifier = Modifier.weight(1f)) {
                             Text("Сохранить TXT")
                         }
                     }
                 }
             }
         }
+
 
         // Кнопка экспорта в Excel таблицу (появляется только при наличии нужных позиций)
         if (viewModel.isExcelVisible) {
@@ -206,6 +278,91 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         }
     }
 }
+
+@Composable
+fun AnimatedButton(
+    text: String,                 // Текст на кнопке (например, "РАСПРЕДЕЛИТЬ")
+    loadingText: String,          // Текст, который покажется при загрузке (например, "Считаю...")
+    isLoading: Boolean,           // Флаг: идет ли сейчас загрузка? (true/false)
+    onClick: () -> Unit,          // Блок кода, который сработает при клике по кнопке
+    modifier: Modifier = Modifier, // Базовый модификатор (сюда из Row прилетает вес .weight)
+    isSecondary: Boolean = false  // Если true — кнопка будет фиолетовой, если false — синей
+) {
+    // -------------------------------------------------------------------------
+    // 1. БЛОК РАСЧЕТА АНИМАЦИЙ СЖАТИЯ И ЦВЕТА
+    // -------------------------------------------------------------------------
+
+    // Анимация масштаба: если загрузка идет, плавно уменьшаем кнопку до 0.95 (на 5% меньше нормы)
+    val scale by animateFloatAsState(if (isLoading) 0.95f else 1f, animationSpec = tween(200), label = "scale")
+
+    // Выбираем базовый цвет кнопки в зависимости от флага isSecondary
+    val baseColor = if (isSecondary) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+    // Выбираем блеклый цвет кнопки для режима загрузки
+    val loadingColor = if (isSecondary) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
+    // Анимируем плавный перелив цвета кнопки за 200 миллисекунд
+    val buttonColor by animateColorAsState(if (isLoading) loadingColor else baseColor, animationSpec = tween(200), label = "color")
+
+    // -------------------------------------------------------------------------
+    // 2. САМ КОМПОНЕНТ КНОПКИ
+    // -------------------------------------------------------------------------
+    Button(
+        onClick = onClick, // Назначаем действие на клик
+
+        // В Модификаторе настраиваются размеры элемента:
+        modifier = modifier
+            .scale(scale), // Применяем эффект анимированного сжатия кнопки
+        // 🛑 ЧТОБЫ СДЕЛАТЬ КНОПКУ КРУПНЕЕ ПО ВЫСОТЕ (Способ 1):
+        // Вы можете жестко зафиксировать высоту кнопке. Напишите тут, например: .height(56.dp)
+
+        enabled = !isLoading, // Блокируем клики во время загрузки ИИ
+
+        // ТУТ НАСТРАИВАЕТСЯ СКРУГЛЕНИЕ УГЛОВ КНОПКИ:
+        // Сейчас стоит 14.dp. Если хотите сделать кнопку более квадратной, уменьшите (например, 8.dp).
+        // Если хотите сделать её идеально круглой капсулой — увеличьте (например, 24.dp).
+        shape = RoundedCornerShape(14.dp),
+
+        colors = ButtonDefaults.buttonColors(containerColor = buttonColor), // Подставляем анимированный цвет
+
+        // Настройка теней (в покое тень приподнимает кнопку на 4dp, при зажатии пальцем — тень падает до 1dp)
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp),
+
+        // 🛑 ЧТОБЫ СДЕЛАТЬ КНОПКУ КРУПНЕЕ И СОЛИДНЕЕ (Способ 2 — Профессиональный):
+        // Вместо жесткой высоты лучше добавить внутренние отступы (паддинги). Они раздвинут кнопку изнутри.
+        // Чтобы применить, раскомментируйте строчку ниже (уберите знаки //) и настройте цифры:
+         contentPadding = PaddingValues(vertical = 50.dp, horizontal = 10.dp), // vertical отвечает за высоту!
+    ) {
+        // -------------------------------------------------------------------------
+        // 3. ВНУТРЕННОЕ СОДЕРЖИМОЕ КНОПКИ (Что нарисовано внутри плашки)
+        // -------------------------------------------------------------------------
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp), // Отступ между крутилкой загрузки и текстом
+            verticalAlignment = Alignment.CenterVertically // Выравниваем текст и крутилку строго по центру внутри кнопки
+        ) {
+            if (isLoading) {
+                // Если ИИ сейчас считает или рисует — показываем колесо загрузки
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp), // ТУТ НАСТРАИВАЕТСЯ РАЗМЕР крутилки загрузки
+                    color = baseColor,               // Цвет крутилки совпадает с главным цветом кнопки
+                    strokeWidth = 2.dp               // Толщина линии крутилки
+                )
+                Text(
+                    text = loadingText,
+                    fontWeight = FontWeight.Bold, // ТУТ НАСТРАИВАЕТСЯ ЖИРНОСТЬ ШРИФТА (Bold — жирный)
+                    fontSize = 13.sp              // 🛑 ТУТ НАСТРАИВАЕТСЯ РАЗМЕР ТЕКСТА КНОПКИ ПРИ ЗАГРУЗКЕ
+                )
+            } else {
+                // Если кнопка свободна — рисуем обычный текст
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.Bold, // Шрифт текста тоже жирный
+                    fontSize = 13.sp              // 🛑 ТУТ НАСТРАИВАЕТСЯ РАЗМЕР ТЕКСТА В ОБЫЧНОМ СОСТОЯНИИ
+                )
+            }
+        }
+    }
+}
+
+
 
 
 
