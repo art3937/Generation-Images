@@ -46,7 +46,7 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     // Запоминаем версию, чтобы не пересчитывать её при каждом рекомпозите
-    val appVersion = remember { viewModel.getAppVersion(context)}
+   // val appVersion = remember { viewModel.getAppVersion(context)}
 
         val coroutineScope = rememberCoroutineScope() // 👈 Добавляем эту строчку
 
@@ -193,11 +193,11 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
 
         }
 
-        Text(
-            text = "Версия приложения: $appVersion",
-            fontSize = 14.sp,
-            color = Color.Gray
-        )
+//        Text(
+//            text = "Версия : $appVersion",
+//            fontSize = 14.sp,
+//            color = Color.Gray
+//        )
 
         // Блок вывода результатов от ИИ (Условный рендеринг: если текста нет — элемент вообще не создается в памяти)
         if (viewModel.isResultVisible) {

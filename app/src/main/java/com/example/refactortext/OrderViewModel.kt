@@ -139,19 +139,19 @@ class OrderViewModel : ViewModel() {
         onToast("Очищено!")
     }
 
-    fun getAppVersion(context: Context): String {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(
-                    context.packageName,
-                    PackageManager.PackageInfoFlags.of(0)
-                ).versionName ?: "1.0"
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
-            }
-        } catch (e: Exception) {
-            "1.0"
-        }
-    }
+//    fun getAppVersion(context: Context): String {
+//        return try {
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+//                context.packageManager.getPackageInfo(
+//                    context.packageName,
+//                    PackageManager.PackageInfoFlags.of(0)
+//                ).versionName ?: "1.0"
+//            } else {
+//                @Suppress("DEPRECATION")
+//                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+//            }
+//        } catch (e: Exception) {
+//            "1.0"
+//        }
+//    }
 }
