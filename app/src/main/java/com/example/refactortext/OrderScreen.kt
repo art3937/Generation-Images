@@ -22,6 +22,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +45,10 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     // Получаем текущий Context Android внутри Compose-функции
     val context = LocalContext.current
 
-    val coroutineScope = rememberCoroutineScope() // 👈 Добавляем эту строчку
+    // Запоминаем версию, чтобы не пересчитывать её при каждом рекомпозите
+    val appVersion = remember { viewModel.getAppVersion(context)}
+
+        val coroutineScope = rememberCoroutineScope() // 👈 Добавляем эту строчку
 
 
     // FocusManager отвечает за фокус элементов ввода. С его помощью мы будем скрывать клавиатуру.
@@ -187,9 +191,13 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 )
             }
 
-
         }
 
+        Text(
+            text = "Версия приложения: $appVersion",
+            fontSize = 14.sp,
+            color = Color.Gray
+        )
 
         // Блок вывода результатов от ИИ (Условный рендеринг: если текста нет — элемент вообще не создается в памяти)
         if (viewModel.isResultVisible) {
@@ -280,6 +288,7 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             }
         }
     }
+
 }
 
 @Composable

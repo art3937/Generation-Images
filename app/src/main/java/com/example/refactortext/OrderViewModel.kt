@@ -3,8 +3,10 @@ package com.example.refactortext
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -137,5 +139,19 @@ class OrderViewModel : ViewModel() {
         onToast("Очищено!")
     }
 
-
+    fun getAppVersion(context: Context): String {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(
+                    context.packageName,
+                    PackageManager.PackageInfoFlags.of(0)
+                ).versionName ?: "1.0"
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+            }
+        } catch (e: Exception) {
+            "1.0"
+        }
+    }
 }
