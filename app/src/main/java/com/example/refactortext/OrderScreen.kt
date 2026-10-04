@@ -84,7 +84,9 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp) // Автоматический отступ между элементами в 12dp
     ) {
-
+        Text( text = "Введите несколько или одно любое слово чтоб сгенерировать текст, а если нужна картинка, нажмите сгенерировать картинку это займет немногим больше времени",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
         // Поле ввода текста (Заменяет EditText)
         Surface( // 👈 Оборачиваем в Surface, чтобы придать форму и контрастный белый цвет
             shape = RoundedCornerShape(16.dp),
@@ -92,12 +94,13 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)), // 👈 Едва заметная тонкая серая граница
             modifier = Modifier.fillMaxWidth()
         ) {
+
             TextField(
                 value = viewModel.inputText,
                 onValueChange = { viewModel.inputText = it },
                 placeholder = {
                     Text(
-                        text = "Текст заказа или описание для ИИ...",
+                        text = " описание для ИИ...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -127,8 +130,8 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         ) {
             // Кнопка 1: РАСПРЕДЕЛИТЬ
             AnimatedButton(
-                text = "РАСПРЕДЕЛИТЬ",
-                loadingText = "Считаю...",
+                text = "Сгенерировать пост",
+                loadingText = "Генерирую...",
                 isLoading = viewModel.isParsing,
                 onClick = { focusManager.clearFocus(); viewModel.parseText(showToast) },
                 modifier = Modifier.weight(1.3f)

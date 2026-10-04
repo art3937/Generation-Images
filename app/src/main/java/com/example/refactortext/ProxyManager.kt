@@ -112,15 +112,15 @@ object ProxyManager {
 
     fun getProxyForAttempt(attempt: Int): Proxy {
         // 1. Попытка 1 — Железно бьем через твой стабильный прокси
-        if (attempt == 1) {
-            try {
-                Log.d(TAG, "[PROXY] Попытка 1. Запуск через стабильный прокси $STABLE_PROXY_HOST:$STABLE_PROXY_PORT")
-                val socketAddress = InetSocketAddress(STABLE_PROXY_HOST, STABLE_PROXY_PORT)
-                return Proxy(Proxy.Type.HTTP, socketAddress)
-            } catch (e: Exception) {
-                Log.e(TAG, "Ошибка инициализации стабильного прокси: ${e.message}")
-            }
-        }
+//        if (attempt == 1) {
+//            try {
+//                Log.d(TAG, "[PROXY] Попытка 1. Запуск через стабильный прокси $STABLE_PROXY_HOST:$STABLE_PROXY_PORT")
+//                val socketAddress = InetSocketAddress(STABLE_PROXY_HOST, STABLE_PROXY_PORT)
+//                return Proxy(Proxy.Type.HTTP, socketAddress)
+//            } catch (e: Exception) {
+//                Log.e(TAG, "Ошибка инициализации стабильного прокси: ${e.message}")
+//            }
+//        }
 
         // 2. Каждую 3-ю попытку (3, 6, 9, 12...) — Пробиваем сеть напрямую без прокси
         if (attempt % 3 == 0) {
@@ -146,10 +146,10 @@ object ProxyManager {
         if (proxy == Proxy.NO_PROXY) return
 
         // ЗАЩИТА СТАБИЛЬНОГО ПРОКСИ (оставляем, как было)
-        val address = proxy.address() as? InetSocketAddress
-        if (address?.hostString == STABLE_PROXY_HOST && address.port == STABLE_PROXY_PORT) {
-            return
-        }
+//        val address = proxy.address() as? InetSocketAddress
+//        if (address?.hostString == STABLE_PROXY_HOST && address.port == STABLE_PROXY_PORT) {
+//            return
+//        }
 
         synchronized(_liveProxies) {
             val currentLiveList = _liveProxies.value.toMutableList()

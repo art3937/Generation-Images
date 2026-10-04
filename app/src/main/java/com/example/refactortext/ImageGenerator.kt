@@ -22,7 +22,7 @@ object ImageGenerator {
 
     // Базовый клиент для работы через прокси
     private val baseClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
@@ -31,11 +31,11 @@ object ImageGenerator {
     // Прямой клиент для аварийного обхода напрямую
     private val directClient = OkHttpClient.Builder()
         .connectTimeout(
-            4,
+            10,
             TimeUnit.SECONDS
         ) // ⚡️ ТАЙМАУТ 4 СЕКУНДЫ: Если прокси плохой, отваливаемся СРАЗУ
-        .readTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .proxy(Proxy.NO_PROXY)
         .retryOnConnectionFailure(false) // ⚡️ ГЛАВНЫЙ СЕКРЕТ ПРОФИ: Запрещаем OkHttp самовольно повторять запросы и тупить!
         .build()
@@ -55,7 +55,7 @@ object ImageGenerator {
         Log.e(TAG, "[IMAGE] переведено: $englishPrompt")
 
         val enhancedPrompt =
-            "$englishPrompt, highly detailed, photorealistic, cinematic lighting, sharp focus"
+            "$englishPrompt, highly detailed, photorealistic, cinematic lighting, sharp focus, this context"
 
         var attempt = 1
         var isGenerated = false
@@ -141,7 +141,7 @@ object ImageGenerator {
                         )
 
                         // ЖЕСТКИЙ ЛИМИТ: Если Cloudflare начнет тянуть время, корутина убьет его ровно через 3000 миллисекунд
-                        bytes = kotlinx.coroutines.withTimeout(3000L.milliseconds) {
+                        bytes = kotlinx.coroutines.withTimeout(4000L.milliseconds) {
                             val req = generateRequest(targetUrl, attempt)
                             directClient.newCall(req).execute().use { response ->
                                 if (!response.isSuccessful) return@use null

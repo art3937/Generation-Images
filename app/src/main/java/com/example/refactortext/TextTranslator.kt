@@ -10,36 +10,62 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 object TextTranslator {
 
-    // Настройка: с Русского на Английский
-    private val options = TranslatorOptions.Builder()
-        .setSourceLanguage(TranslateLanguage.RUSSIAN)
-        .setTargetLanguage(TranslateLanguage.ENGLISH)
+    private val conditions = DownloadConditions.Builder()
+        .requireWifi()
         .build()
-
-    private val translator = Translation.getClient(options)
 
     /**
      * Переводит текст с русского на английский.
-     * Автоматически дожидается скачивания языкового пакета, если его нет.
      */
-    suspend fun translateRuToEn(text: String): String = suspendCancellableCoroutine { continuation ->
-        val conditions = DownloadConditions.Builder()
-            .requireWifi() // Можно убрать, если хотите разрешить скачивание по мобильной сети
-            .build()
-
-        // Проверяем/скачиваем модель, затем переводим
-        translator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                translator.translate(text)
-                    .addOnSuccessListener { translatedText ->
-                        if (continuation.isActive) continuation.resume(translatedText)
-                    }
-                    .addOnFailureListener { exception ->
-                        if (continuation.isActive) continuation.resumeWithException(exception)
-                    }
-            }
-            .addOnFailureListener { exception ->
-                if (continuation.isActive) continuation.resumeWithException(exception)
-            }
+    suspend fun translateRuToEn(text: String): String {
+        return translate(text, TranslateLanguage.RUSSIAN, TranslateLanguage.ENGLISH)
     }
+
+    /**
+     * Переводит текст с английского на русский.
+     */
+    suspend fun translateEnToRu(text: String): String {
+        return translate(text, TranslateLanguage.ENGLISH, TranslateLanguage.RUSSIAN)
+    }
+
+    /**
+     * Универсальный метод перевода на стандартных колбэках Google Play Services
+     */
+    private suspend fun translate(text: String, fromLang: String, toLang: String): String =
+        suspendCancellableCoroutine { continuation ->
+            val options = TranslatorOptions.Builder()
+                .setSourceLanguage(fromLang)
+                .setTargetLanguage(toLang)
+                .build()
+
+            val translator = Translation.getClient(options)
+
+            // Если корутина отменяется извне, принудительно закрываем переводчик
+            continuation.invokeOnCancellation {
+                translator.close()
+            }
+
+            translator.downloadModelIfNeeded(conditions)
+                .addOnSuccessListener {
+                    translator.translate(text)
+                        .addOnSuccessListener { translatedText ->
+                            if (continuation.isActive) {
+                                continuation.resume(translatedText)
+                                translator.close() // Освобождаем память после успеха
+                            }
+                        }
+                        .addOnFailureListener { exception ->
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(exception)
+                                translator.close() // Освобождаем память при ошибке перевода
+                            }
+                        }
+                }
+                .addOnFailureListener { exception ->
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(exception)
+                        translator.close() // Освобождаем память при ошибке скачивания
+                    }
+                }
+        }
 }

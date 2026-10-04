@@ -135,6 +135,10 @@ dependencies {
 
         // Актуальная библиотека Lottie для Jetpack Compose
         implementation("com.airbnb.android:lottie-compose:6.6.0") // или более свежая версия
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1") // используйте актуальную версию для вашего проекта
+
+
+
 
 
 }
