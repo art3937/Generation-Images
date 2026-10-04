@@ -46,9 +46,9 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     // Запоминаем версию, чтобы не пересчитывать её при каждом рекомпозите
-   // val appVersion = remember { viewModel.getAppVersion(context)}
+  // val appVersion = remember(context.packageName) { viewModel.getAppVersion(context) }
 
-        val coroutineScope = rememberCoroutineScope() // 👈 Добавляем эту строчку
+   val coroutineScope = rememberCoroutineScope()
 
 
     // FocusManager отвечает за фокус элементов ввода. С его помощью мы будем скрывать клавиатуру.

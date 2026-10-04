@@ -28,28 +28,12 @@ object OrderParser {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private fun parseJsonPositions(jsonText: String): ParsedOrder {
-        return ParsedOrder(emptyList(), emptyList())
-    }
 
-    fun formatText(o: ParsedOrder): String {
-        return ""
-    }
 
-    /**
-     * Генерирует пост через базовый, 100% бесплатный анонимный текстовый шлюз Pollinations.
-     */
     suspend fun parseTextWithAI(inputText: String): ParseResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "[REQUEST] Оригинальный текст пользователя: $inputText")
 
         try {
-            // 1. Перевод темы ввода на английский язык с помощью вашего TextTranslator
-          //  val englishTopic = TextTranslator.translateRuToEn(inputText)
-           // Log.d(TAG, "[TRANSLATOR] Текст успешно переведен на английский: $englishTopic")
-
-            // 2. Формируем промпт для ИИ
-           // val finalPrompt = "make a post on this topic: $englishTopic"
-            // ГЛАВНОЕ: явно просим про смайлики и стиль
             val finalPrompt = """
         Напиши небольшой пост на тему: «$inputText».
         Пиши живым, разговорным русским языком — так, будто пишешь для призедента
@@ -75,25 +59,7 @@ object OrderParser {
                 val code = resp.code
                 var respStr = resp.body?.string() ?: ""
 
-//                Log.d(TAG, "[HTTP] Код: $code, Длина ответа: ${respStr.length}")
-//
-//                if (!resp.isSuccessful) {
-//                    Log.e(TAG, "[HTTP] Ошибка: $code | $respStr")
-//                    return@withContext ParseResult(
-//                        "Ошибка Pollinations (Код: $code)\n$respStr",
-//                        ParsedOrder(emptyList(), emptyList())
-//                    )
-//                }
-//
-//                respStr = respStr.trim()
-//
-//                // Очистка от возможных markdown-тегов кода ```
-//                if (respStr.contains("```")) {
-//                    respStr = respStr
-//                        .replace("```json", "")
-//                        .replace("```", "")
-//                        .trim()
-//                }
+
 
                 // Защитная проверка от HTML-страниц
                 if (respStr.startsWith("<") && respStr.contains("html")) {
@@ -103,17 +69,6 @@ object OrderParser {
                         ParsedOrder(emptyList(), emptyList())
                     )
                 }
-
-                Log.d(TAG, "[AI RESPONSE] Пост на английском языке успешно сгенерирован шлюзом.")
-
-                // 4. Переводим полученный текст обратно на русский
-              //  val russianTranslation = TextTranslator.translateEnToRu(respStr)
-                // 3. Переводим через наш новый DeepLTranslator (качество ИИ-уровня)
-           //   val russianTranslation = DeepLTranslator.translateEnToRu(russianTranslation1)
-
-                // ИСПРАВЛЕНО: Склеиваем английский оригинал и русский перевод через двойные переносы и черточки
-               // val combinedText = respStr
-
                 return@withContext ParseResult(respStr, ParsedOrder(emptyList(), emptyList()))
             }
         } catch (e: Exception) {

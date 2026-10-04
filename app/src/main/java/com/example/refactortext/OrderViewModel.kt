@@ -145,7 +145,7 @@ class OrderViewModel : ViewModel() {
 //                context.packageManager.getPackageInfo(
 //                    context.packageName,
 //                    PackageManager.PackageInfoFlags.of(0)
-//                ).versionName ?: "1.0"
+//                ).versionName ?: ""
 //            } else {
 //                @Suppress("DEPRECATION")
 //                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
