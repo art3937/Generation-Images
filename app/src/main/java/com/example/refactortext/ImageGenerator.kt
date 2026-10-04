@@ -34,7 +34,7 @@ object ImageGenerator {
             10,
             TimeUnit.SECONDS
         ) // ⚡️ ТАЙМАУТ 4 СЕКУНДЫ: Если прокси плохой, отваливаемся СРАЗУ
-        .readTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(40, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
         .proxy(Proxy.NO_PROXY)
         .retryOnConnectionFailure(false) // ⚡️ ГЛАВНЫЙ СЕКРЕТ ПРОФИ: Запрещаем OkHttp самовольно повторять запросы и тупить!
@@ -81,30 +81,16 @@ object ImageGenerator {
                 baseClient.connectionPool.evictAll()
                 directClient.connectionPool.evictAll()
 
-                // Получаем прокси из вашего менеджера
-                val currentProxy = ProxyManager.getProxyForAttempt(attempt)
-                Log.d(TAG, "[PROXY] Попытка $attempt. Запуск через прокси: $currentProxy")
-
-                val dynamicClient = baseClient.newBuilder()
-                    .proxy(currentProxy)
-                    .connectTimeout(20, TimeUnit.SECONDS)
-                    .readTimeout(10, TimeUnit.SECONDS)
-                    .build()
-
                 Log.d(TAG, "[IMAGE] '$russianPrompt'. Попытка $attempt. URL: $targetUrl")
 
                 var bytes: ByteArray? = null
 
-                // 1. Попытка запроса через динамический ПРОКСИ
+// 1. Основная попытка НАПРЯМУЮ (без прокси)
                 try {
                     val req = generateRequest(targetUrl, attempt)
-                    bytes = dynamicClient.newCall(req).execute().use { response ->
+                    bytes = directClient.newCall(req).execute().use { response ->
                         if (!response.isSuccessful) {
-                            Log.w(
-                                TAG,
-                                "[IMAGE] Прокси HTTP Код ошибки: ${response.code}. Меняем IP."
-                            )
-                            ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                            Log.w(TAG, "[IMAGE] Прямой запрос HTTP ${response.code}. Переходим на прокси.")
                             return@use null
                         }
                         val body = response.body ?: return@use null
@@ -115,60 +101,58 @@ object ImageGenerator {
                         if (rawBytes.size < 500_000) {
                             val str = String(rawBytes, Charsets.UTF_8)
                             if (str.trim().startsWith("<!DOCTYPE") || str.contains("<html")) {
-                                Log.w(TAG, "[IMAGE] Прокси выдал HTML-заглушку от Cloudflare.")
-                                ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                                Log.w(TAG, "[IMAGE] Прямой запрос выдал HTML-заглушку от Cloudflare.")
                                 return@use null
                             }
                         }
 
-                        ProxyManager.reportProxyStatus(currentProxy, isSuccess = true)
                         rawBytes
                     }
-                } catch (proxyException: Exception) {
-                    Log.w(
-                        TAG,
-                        "[IMAGE] Сбой сети текущего прокси на попытке $attempt: ${proxyException.message}"
-                    )
-                    ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                } catch (directException: Exception) {
+                    Log.w(TAG, "[IMAGE] Сбой прямого подключения на попытке $attempt: ${directException.message}")
                 }
 
-                // 2. АВАРИЙНЫЙ ОБХОД НАПРЯМУЮ (Срабатывает, если через прокси скачать не удалось)
+// 2. АВАРИЙНЫЙ ОБХОД ЧЕРЕЗ ПРОКСИ (срабатывает, если напрямую скачать не удалось)
                 if (bytes == null) {
                     try {
-                        Log.w(
-                            TAG,
-                            "[IMAGE] Аварийный режим напрямую без прокси для попытки $attempt..."
-                        )
+                        val currentProxy = ProxyManager.getProxyForAttempt(attempt)
+                        Log.w(TAG, "[IMAGE] Аварийный режим через прокси $currentProxy для попытки $attempt...")
 
-                        // ЖЕСТКИЙ ЛИМИТ: Если Cloudflare начнет тянуть время, корутина убьет его ровно через 3000 миллисекунд
-                        bytes = kotlinx.coroutines.withTimeout(4000L.milliseconds) {
-                            val req = generateRequest(targetUrl, attempt)
-                            directClient.newCall(req).execute().use { response ->
-                                if (!response.isSuccessful) return@use null
-                                val body = response.body ?: return@use null
-                                val rawBytes = body.bytes()
+                        val dynamicClient = baseClient.newBuilder()
+                            .proxy(currentProxy)
+                            .connectTimeout(20, TimeUnit.SECONDS)
+                            .readTimeout(10, TimeUnit.SECONDS)
+                            .build()
 
-                                if (rawBytes.size < 500_000) {
-                                    val str = String(rawBytes, Charsets.UTF_8)
-                                    if (str.trim()
-                                            .startsWith("<!DOCTYPE") || str.contains("<html")
-                                    ) {
-                                        return@use null
-                                    }
-                                }
-                                if (rawBytes.isNotEmpty()) rawBytes else null
+                        val req = generateRequest(targetUrl, attempt)
+                        bytes = dynamicClient.newCall(req).execute().use { response ->
+                            if (!response.isSuccessful) {
+                                Log.w(TAG, "[IMAGE] Прокси HTTP Код ошибки: ${response.code}. Меняем IP.")
+                                ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                                return@use null
                             }
+                            val body = response.body ?: return@use null
+                            val rawBytes = body.bytes()
+                            if (rawBytes.isEmpty()) return@use null
+
+                            if (rawBytes.size < 500_000) {
+                                val str = String(rawBytes, Charsets.UTF_8)
+                                if (str.trim().startsWith("<!DOCTYPE") || str.contains("<html")) {
+                                    Log.w(TAG, "[IMAGE] Прокси выдал HTML-заглушку от Cloudflare.")
+                                    ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
+                                    return@use null
+                                }
+                            }
+
+                            ProxyManager.reportProxyStatus(currentProxy, isSuccess = true)
+                            rawBytes
                         }
-                    } catch (timeoutEx: kotlinx.coroutines.TimeoutCancellationException) {
-                        // Ловим зависание Cloudflare и мгновенно идем дальше
-                        Log.e(
-                            TAG,
-                            "[IMAGE] Аварийный режим напрямую ЗАВИС намертво. Корутина принудительно сбросила его."
-                        )
-                    } catch (directException: Exception) {
-                        Log.e(TAG, "[IMAGE] Крах прямого подключения: ${directException.message}")
+                    } catch (proxyException: Exception) {
+                        Log.e(TAG, "[IMAGE] Крах прокси-запроса на попытке $attempt: ${proxyException.message}")
+                        // reportProxyStatus здесь нужен, если currentProxy доступен в этой области видимости
                     }
                 }
+
 
                 // 3. Сборка Bitmap в максимальном качестве
                 if (bytes != null) {
