@@ -21,10 +21,12 @@ android {
         applicationId = "com.example.refactortext"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2       // Увеличьте на 1 для каждого нового релиза в Google Play
+        versionName = "1.1"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
+    
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Получаем значения напрямую из local.properties
         // Если в файле кавычки уже стоят, Gradle запишет их правильно
