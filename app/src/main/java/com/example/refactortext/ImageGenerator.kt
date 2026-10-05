@@ -68,6 +68,8 @@ object ImageGenerator {
 
         // НАСТОЯЩИЙ ЧЕСТНЫЙ БЕСКОНЕЧНЫЙ ЦИКЛ
         while (!isGenerated) {
+            var currentProxy: java.net.Proxy? = null
+            currentProxy = ProxyManager.getProxyForAttempt(attempt)
             try {
                 val randomSeed = (1..100_000).random()
                 val targetUrl = HttpUrl.Builder().scheme("https").host("image.pollinations.ai")
@@ -114,20 +116,17 @@ object ImageGenerator {
 
                 // 2. АВАРИЙНЫЙ ОБХОД ЧЕРЕЗ ПРОКСИ (срабатывает, если напрямую скачать не удалось)
                 if (bytes == null) {
-                    var currentProxy: java.net.Proxy? = null
                     try {
-                        currentProxy = ProxyManager.getProxyForAttempt(attempt)
-
                         // ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: Если менеджер прокси сует DIRECT, хотя мы только что там упали — скипаем!
-                        if (currentProxy == null || currentProxy == java.net.Proxy.NO_PROXY) {
+                        if (currentProxy == java.net.Proxy.NO_PROXY) {
                             Log.w(TAG, "[IMAGE] Аварийный режим выдал DIRECT (дубликат прямого запроса). Пропускаем шаг.")
                         } else {
                             Log.w(TAG, "[IMAGE] Аварийный режим через прокси $currentProxy для попытки $attempt...")
 
                             // ЖЕСТКИЕ ТАЙМАУТЫ ДЛЯ ПРОКСИ: 5 секунд на коннект, никаких зависаний по 20 сек!
                             val dynamicClient = baseClient.newBuilder().proxy(currentProxy)
-                                .connectTimeout(5, TimeUnit.SECONDS)
-                                .readTimeout(6, TimeUnit.SECONDS)
+                                .connectTimeout(15, TimeUnit.SECONDS)
+                                .readTimeout(16, TimeUnit.SECONDS)
                                 .build()
 
                             val req = generateRequest(targetUrl, attempt)
@@ -156,7 +155,7 @@ object ImageGenerator {
                         }
                     } catch (proxyException: Exception) {
                         Log.e(TAG, "[IMAGE] Крах прокси-запроса на попытке $attempt: ${proxyException.message}")
-                        if (currentProxy != null && currentProxy != java.net.Proxy.NO_PROXY) {
+                        if (currentProxy != java.net.Proxy.NO_PROXY) {
                             ProxyManager.reportProxyStatus(currentProxy, isSuccess = false)
                         }
                         bytes = null

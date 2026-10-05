@@ -28,8 +28,6 @@ object OrderParser {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-
-
     suspend fun parseTextWithAI(inputText: String): ParseResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "[REQUEST] Оригинальный текст пользователя: $inputText")
 
@@ -59,8 +57,7 @@ object OrderParser {
                 val code = resp.code
                 var respStr = resp.body?.string() ?: ""
 
-
-
+                Log.e(TAG, "код респонсе $code")
                 // Защитная проверка от HTML-страниц
                 if (respStr.startsWith("<") && respStr.contains("html")) {
                     Log.e(TAG, "[HTTP] Ошибка: Сервер вернул веб-страницу вместо текста.")
@@ -69,6 +66,7 @@ object OrderParser {
                         ParsedOrder(emptyList(), emptyList())
                     )
                 }
+
                 return@withContext ParseResult(respStr, ParsedOrder(emptyList(), emptyList()))
             }
         } catch (e: Exception) {
