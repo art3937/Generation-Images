@@ -23,7 +23,7 @@ android {
         targetSdk = 37
         versionCode = 2       // Увеличьте на 1 для каждого нового релиза в Google Play
         versionName = "1.1"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
-    
+
 
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -2,10 +2,13 @@ package com.example.refactortext
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 object OrderParser {
@@ -20,61 +23,147 @@ object OrderParser {
         val totalExchange get() = exchangePositions.sumOf { it.second }
     }
 
-    // ОСТАВЛЕНО ДЛЯ СОВМЕСТИМОСТИ С VIEWMODEL (структура без изменений)
+    // ОСТАВЛЕНО ДЛЯ СОВМЕСТИМОСТИ С VIEWMODEL
     data class ParseResult(val text: String, val order: ParsedOrder)
 
+    private data class AiNode(
+        val type: String,
+        val host: String,
+        val model: String
+    )
+
+    // Оптимальные таймауты: не ждем мертвые сервера слишком долго
     private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .build()
 
     suspend fun parseTextWithAI(inputText: String): ParseResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "[REQUEST] Оригинальный текст пользователя: $inputText")
 
-        try {
-            val finalPrompt = """
-        Напиши небольшой пост на тему: «$inputText».
-        Пиши живым, разговорным русским языком — так, будто пишешь для призедента
-        Обязательно добавь побольше подходящих эмодзи или картинок в тексте (не в конце отдельным блоком).
-        Ответь ТОЛЬКО готовым текстом поста, тщательно проверяй текст на складность.
-    """.trimIndent()
-            // 3. GET-запрос к text.pollinations.ai без query-параметров.
-            val httpUrl = HttpUrl.Builder()
-                .scheme("https")
-                .host("text.pollinations.ai")
-                .addPathSegment(finalPrompt) // Автоматически экранирует пробелы и спецсимволы
-                .build()
+        val finalPrompt = """
+            Напиши небольшой пост на тему: «$inputText».
+            Пиши живым, разговорным русским языком — так, будто пишешь для президента
+            Обязательно добавь побольше подходящих эмодзи или картинок в тексте (не в конце отдельным блоком).
+            Ответь ТОЛЬКО готовым текстом поста, тщательно проверяй текст на складность.
+        """.trimIndent()
 
-            val apiUrl = httpUrl.toString()
-            Log.d(TAG, "[REQUEST] Итоговый URL: $apiUrl")
+        // РАСШИРЕННЫЙ И ОБНОВЛЕННЫЙ ПУЛ СЕРВЕРОВ
+        val aiPool = listOf(
+            // Твой оригинальный проверенный вариант
+            AiNode("GET_PATH", "text.pollinations.ai", ""),
 
-            val request = Request.Builder()
-                .url(apiUrl)
-                .get()
-                .build()
+            // Запросы через query к разным кластерам моделей
+            AiNode("GET_QUERY", "text.pollinations.ai", "openai"),
+            AiNode("GET_QUERY", "text.pollinations.ai", "qwen"),
+            AiNode("GET_QUERY", "text.pollinations.ai", "llama"),
 
-            client.newCall(request).execute().use { resp ->
-                val code = resp.code
-                var respStr = resp.body?.string() ?: ""
+            // Новое стабильное зеркало Koala AI (Keyless)
+            AiNode("GET_QUERY", "api.koala.sh", "gpt-4o-mini"),
 
-                Log.e(TAG, "код респонсе $code")
-                // Защитная проверка от HTML-страниц
-                if (respStr.startsWith("<") && respStr.contains("html")) {
-                    Log.e(TAG, "[HTTP] Ошибка: Сервер вернул веб-страницу вместо текста.")
-                    return@withContext ParseResult(
-                        "Ошибка: Некорректный формат ответа сервера.",
-                        ParsedOrder(emptyList(), emptyList())
-                    )
+            // Резервные ноды-зеркала
+            AiNode("GET_QUERY", "text.lan2wan.ai", "openai"),
+            AiNode("GET_QUERY", "text.lan2wan.ai", "llama"),
+
+            // PUTERS с POST-JSON
+            AiNode("POST_JSON", "://puter.com", "gpt-4o-mini")
+        )
+
+        var resultText = ""
+        var attemptCounter = 0
+
+        while (resultText.isBlank()) {
+            val currentNode = aiPool[attemptCounter % aiPool.size]
+            attemptCounter++
+
+            val host = currentNode.host
+            val model = currentNode.model
+            Log.d(TAG, "[HTTP] Попытка №$attemptCounter. Сервер: $host | Модель: $model")
+
+            try {
+                val request: Request = when (currentNode.type) {
+                    "GET_PATH" -> {
+                        val url = HttpUrl.Builder()
+                            .scheme("https")
+                            .host(host)
+                            .addPathSegment(finalPrompt)
+                            .build()
+                        Request.Builder()
+                            .url(url)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                            .header("Accept", "text/plain, */*")
+                            .get()
+                            .build()
+                    }
+                    "GET_QUERY" -> {
+                        val url = HttpUrl.Builder()
+                            .scheme("https")
+                            .host(host)
+                            .addPathSegment("prompt")
+                            .addPathSegment(finalPrompt) // Пробуем совмещенный безопасный путь
+                            .apply {
+                                if (model.isNotBlank()) addQueryParameter("model", model)
+                            }
+                            .build()
+                        Request.Builder()
+                            .url(url)
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                            .header("Accept", "*/*")
+                            .get()
+                            .build()
+                    }
+                    "POST_JSON" -> {
+                        val url = HttpUrl.Builder().scheme("https").host(host).addPathSegment("v1").addPathSegment("ai").addPathSegment("chat").build()
+                        val safePrompt = finalPrompt.replace("\"", "\\\"").replace("\n", "\\n")
+                        val jsonBody = """{"messages": [{"role": "user", "content": "$safePrompt"}]}"""
+                        val body = jsonBody.toRequestBody("application/json".toMediaType())
+                        Request.Builder()
+                            .url(url)
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                            .header("Accept", "application/json")
+                            .post(body)
+                            .build()
+                    }
+                    else -> continue
                 }
 
-                return@withContext ParseResult(respStr, ParsedOrder(emptyList(), emptyList()))
+                client.newCall(request).execute().use { resp ->
+                    val code = resp.code
+                    var respStr = resp.body?.string() ?: ""
+
+                    if (resp.isSuccessful && respStr.isNotBlank()) {
+                        // Убираем HTML-заглушки Cloudflare
+                        if (respStr.trim().startsWith("<") && respStr.contains("html", ignoreCase = true)) {
+                            Log.w(TAG, "[HTTP] Сервер $host вернул HTML-страницу ошибки вместо текста.")
+                        } else {
+                            // Извлекаем текст, если прилетел JSON
+                            if (currentNode.type == "POST_JSON" && respStr.contains("\"content\"")) {
+                                var cleanStr = respStr.substringAfter("\"content\"")
+                                cleanStr = cleanStr.substringAfter("\"").substringBefore("\"")
+                                    .replace("\\n", "\n").replace("\\\"", "\"")
+                                if (cleanStr.isNotBlank()) resultText = cleanStr
+                            } else {
+                                // Для всех GET-запросов (чистый текст)
+                                resultText = respStr
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "[HTTP] Сервер $host ответил кодом ошибки: $code")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[HTTP] Сетевое исключение на $host: ${e.localizedMessage}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "[HTTP] Ошибка выполнения запроса: ${e.localizedMessage}", e)
-            return@withContext ParseResult(
-                "Ошибка: ${e.localizedMessage}",
-                ParsedOrder(emptyList(), emptyList())
-            )
+
+            // Если на этом шаге текст пустой — ждем 2 секунды и идем на новый круг цикла
+            if (resultText.isBlank()) {
+                Log.w(TAG, "[HTTP] Точка не ответила. Смена сервера...")
+                delay(2000)
+            }
         }
+
+        Log.d(TAG, "[HTTP] Успешно! Текст поста получен на попытке №$attemptCounter.")
+        ParseResult(resultText, ParsedOrder(emptyList(), emptyList()))
     }
 }

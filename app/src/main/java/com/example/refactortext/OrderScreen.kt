@@ -22,6 +22,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -138,7 +139,8 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 loadingText = "Генерирую...",
                 isLoading = viewModel.isParsing,
                 onClick = { focusManager.clearFocus(); viewModel.parseText(showToast) },
-                modifier = Modifier.weight(1.3f)
+                modifier = Modifier.weight(1.1f) .height(IntrinsicSize.Min) // Кнопка зафиксирует минимально необходимую высоту для текста в 1 строку
+
             )
 
             // Кнопка 2: КАРТИНКА ИИ
@@ -346,6 +348,10 @@ fun AnimatedButton(
         // -------------------------------------------------------------------------
         // 3. ВНУТРЕННОЕ СОДЕРЖИМОЕ КНОПКИ (Что нарисовано внутри плашки)
         // -------------------------------------------------------------------------
+        // Динамический размер шрифта. Начинается с ваших 13.sp
+        val currentText = if (isLoading) loadingText else text
+        val fontSize = remember(currentText) { mutableStateOf(13.sp) }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp), // Отступ между крутилкой загрузки и текстом
             verticalAlignment = Alignment.CenterVertically // Выравниваем текст и крутилку строго по центру внутри кнопки
@@ -359,16 +365,41 @@ fun AnimatedButton(
                 )
                 Text(
                     text = loadingText,
-                    fontWeight = FontWeight.Bold, // ТУТ НАСТРАИВАЕТСЯ ЖИРНОСТЬ ШРИФТА (Bold — жирный)
-                    fontSize = 13.sp              // 🛑 ТУТ НАСТРАИВАЕТСЯ РАЗМЕР ТЕКСТА КНОПКИ ПРИ ЗАГРУЗКЕ
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize.value,        // 1. Подставляем динамический размер вместо жесткого 13.sp
+                    maxLines = 1,                     // 2. Строго одна строка
+                    softWrap = false,                 // 3. Запрещаем перенос слов на новую строку
+                    onTextLayout = { textLayoutResult ->
+                        if (textLayoutResult.hasVisualOverflow) {
+                            // Проверяем чистое число (значение float)
+                            if (fontSize.value.value > 9f) {
+                                // Правильное уменьшение: берем текущее число, отнимаем 0.5 и упаковываем обратно в .sp
+                                fontSize.value = (fontSize.value.value - 0.5f).sp
+                            }
+                        }
+                    }
+
                 )
             } else {
                 // Если кнопка свободна — рисуем обычный текст
                 Text(
                     text = text,
-                    fontWeight = FontWeight.Bold, // Шрифт текста тоже жирный
-                    fontSize = 13.sp              // 🛑 ТУТ НАСТРАИВАЕТСЯ РАЗМЕР ТЕКСТА В ОБЫЧНОМ СОСТОЯНИИ
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize.value,        // 1. Подставляем динамический размер вместо жесткого 13.sp
+                    maxLines = 1,                     // 2. Строго одна строка
+                    softWrap = false,                 // 3. Запрещаем перенос слов на новую строку
+                    onTextLayout = { textLayoutResult ->
+                        if (textLayoutResult.hasVisualOverflow) {
+                            // Проверяем чистое число (значение float)
+                            if (fontSize.value.value > 9f) {
+                                // Правильное уменьшение: берем текущее число, отнимаем 0.5 и упаковываем обратно в .sp
+                                fontSize.value = (fontSize.value.value - 0.5f).sp
+                            }
+                        }
+                    }
+
                 )
+
             }
         }
     }
