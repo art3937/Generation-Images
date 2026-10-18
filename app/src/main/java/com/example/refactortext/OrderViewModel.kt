@@ -3,10 +3,8 @@ package com.example.refactortext
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,16 +22,21 @@ class OrderViewModel : ViewModel() {
 
     // Текст ответа от ИИ, который мы выводим в карточке результатов
     var resultText by mutableStateOf("")
+    var resultTextYandex by mutableStateOf("")
 
     // Битмап сгенерированной картинки (null, если картинки ещё нет)
     var generatedBitmap by mutableStateOf<Bitmap?>(null)
+    var generatedBitmapYandex by mutableStateOf<Bitmap?>(null)
 
     // Ссылка на сохранённый файл Excel для кнопки "Открыть Excel"
     var lastSavedExcelUri by mutableStateOf<Uri?>(null)
 
     // === СОСТОЯНИЯ ЗАГРУЗКИ (ИНДИКАТОРЫ) ===
-    var isParsing by mutableStateOf(false)          // Идет ли парсинг текста
+    var isParsing by mutableStateOf(false)
+    var isParsingYandex by mutableStateOf(false)   // Идет ли парсинг текста
     var isGeneratingImage by mutableStateOf(false)  // Рисует ли ИИ картинку
+
+    var isGeneratingImageYandex by mutableStateOf(false)  // Рисует ли ИИ картинку
     var isSavingExcel by mutableStateOf(false)      // Сохраняется ли в данный момент Excel
     var excelBtnText by mutableStateOf("СОХРАНИТЬ В EXCEL")
 
@@ -43,6 +46,7 @@ class OrderViewModel : ViewModel() {
     // === ВЫЧИСЛЯЕМЫЕ СВОЙСТВА ===
     // Показывать ли блок с результатами? Показываем, только если там есть текст
     val isResultVisible: Boolean get() = resultText.isNotBlank()
+    val isResultVisibleYandex: Boolean get() = resultTextYandex.isNotBlank()
 
     // Показывать ли кнопку Excel? Только если в заказе есть новые позиции или позиции на обмен
     val isExcelVisible: Boolean get() = lastOrder?.let {
@@ -81,7 +85,43 @@ class OrderViewModel : ViewModel() {
         }
     }
 
+    fun parseTextYandex(onToast: (String) -> Unit) {
+        if (inputText.isBlank()) return onToast("Поле ввода пусто!")
+
+        isParsingYandex = true // Включаем режим загрузки (кнопка заблокируется и сменит текст)
+        viewModelScope.launch {
+            try {
+                val res = GenerateTextYandex.parseTextWithAI(inputText)
+                resultTextYandex = res
+            } catch (e: Exception) {
+                onToast("Ошибка сети!")
+            } finally {
+                isParsingYandex = false // Выключаем режим загрузки в любом случае
+            }
+        }
+    }
+
     // Метод генерации изображения
+    fun generateImageYandex(onToast: (String) -> Unit) {
+        if (inputText.isBlank()) return onToast("Введите описание!")
+
+        isGeneratingImageYandex = true
+        viewModelScope.launch {
+            try {
+                val b = YandexImageGenerator.generateImage(inputText)
+                if (b != null) {
+                    generatedBitmapYandex = b
+                } else {
+                    onToast("Ошибка картинки")
+                }
+            } catch (e: Exception) {
+                onToast("Ошибка ИИ")
+            } finally {
+                isGeneratingImageYandex = false
+            }
+        }
+    }
+
     fun generateImage(onToast: (String) -> Unit) {
         if (inputText.isBlank()) return onToast("Введите описание!")
 
@@ -129,11 +169,20 @@ class OrderViewModel : ViewModel() {
         onToast("Скопировано!")
     }
 
+    fun copyToClipboardYandex(context: Context, onToast: (String) -> Unit) {
+        if (resultText.isBlank()) return onToast("Нечего копировать!")
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Order", resultTextYandex))
+        onToast("Скопировано!")
+    }
+
     // Сброс всех состояний экрана в исходное (Кнопка "Очистить")
     fun clearAll(onToast: (String) -> Unit) {
         inputText = ""
+        resultTextYandex = ""
         resultText = ""
         generatedBitmap = null
+        generatedBitmapYandex = null
         lastSavedExcelUri = null
         lastOrder = null
         onToast("Очищено!")

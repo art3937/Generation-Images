@@ -64,10 +64,26 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         uri?.let { (context as MainActivity).saveBytes(it, viewModel.resultText.toByteArray()) }
     }
 
+    val txtLauncherYandex = rememberLauncherForActivityResult(CreateDocument("text/plain")) { uri ->
+        uri?.let { (context as MainActivity).saveBytes(it, viewModel.resultTextYandex.toByteArray()) }
+    }
+
     // 2. Для сохранения JPEG-картинки, созданной ИИ
     val imgLauncher = rememberLauncherForActivityResult(CreateDocument("image/jpeg")) { uri ->
         uri?.let { u ->
             viewModel.generatedBitmap?.let { b ->
+                context.contentResolver.openOutputStream(u)?.use {
+                    b.compress(Bitmap.CompressFormat.JPEG, 95, it)
+                }
+                Toast.makeText(context, "Сохранено!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+   // 2. Для сохранения JPEG-картинки, созданной ИИ от яндекса
+    val imgLauncherYandex = rememberLauncherForActivityResult(CreateDocument("image/jpeg")) { uri ->
+        uri?.let { u ->
+            viewModel.generatedBitmapYandex?.let { b ->
                 context.contentResolver.openOutputStream(u)?.use {
                     b.compress(Bitmap.CompressFormat.JPEG, 95, it)
                 }
@@ -195,6 +211,34 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
 
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Кнопка 1: РАСПРЕДЕЛИТЬ
+            AnimatedButton(
+                text = "Сгенерировать пост через яндекс",
+                loadingText = "Генерирую...",
+                isLoading = viewModel.isParsingYandex,
+                onClick = { focusManager.clearFocus(); viewModel.parseTextYandex(showToast) },
+                modifier = Modifier.weight(1.1f)
+                    .height(IntrinsicSize.Min) // Кнопка зафиксирует минимально необходимую высоту для текста в 1 строку
+
+            )
+
+            // Кнопка 2: КАРТИНКА ИИ
+            AnimatedButton(
+                text = "КАРТИНКА ИИ От Яндекса",
+                loadingText = "Рисую...",
+                isLoading = viewModel.isGeneratingImageYandex,
+                onClick = { focusManager.clearFocus(); viewModel.generateImageYandex(showToast) },
+                modifier = Modifier.weight(1.1f),
+                isSecondary = true
+            )
+
+        }
 //        Text(
 //            text = "Версия : $appVersion",
 //            fontSize = 14.sp,
@@ -227,11 +271,36 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             }
         }
 
+        if (viewModel.isResultVisibleYandex) {
+            ElevatedCard( // 👈 Вместо Card используем ElevatedCard
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp), // 👈 Современное крупное скругление углов
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow // 👈 Профессиональный мягкий фон
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp) // 👈 Идеально просчитанная тень
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(text = viewModel.resultTextYandex, style = MaterialTheme.typography.bodyLarge)
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
+                        ElevatedButton(onClick = { viewModel.copyToClipboardYandex(context, showToast) }, modifier = Modifier.weight(1f)) {
+                            Text("Копировать")
+                        }
+                        ElevatedButton(onClick = { txtLauncherYandex.launch("postYandex.txt") }, modifier = Modifier.weight(1f)) {
+                            Text("Сохранить TXT")
+                        }
+                    }
+                }
+            }
+        }
+
 
         // Кнопка экспорта в Excel таблицу (появляется только при наличии нужных позиций)
         if (viewModel.isExcelVisible) {
             Button(
-                onClick = { xlsLauncher.launch("zakaz_${System.currentTimeMillis()}.xlsx") },
+                onClick = { xlsLauncher.launch("post_${System.currentTimeMillis()}.xlsx") },
                 enabled = !viewModel.isSavingExcel,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -282,6 +351,36 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
 
                     Button(
                         onClick = { imgLauncher.launch("ii_img.jpg") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("СОХРАНИТЬ В JPEG")
+                    }
+                }
+            }
+        }
+
+
+        viewModel.generatedBitmapYandex?.let { bitmap ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Конвертируем стандартный Android Bitmap в пригодный для Compose ImageBitmap
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Сгенерированная картинка от Яндекса",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                    )
+
+                    Button(
+                        onClick = { imgLauncherYandex.launch("ii_img.jpg") },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("СОХРАНИТЬ В JPEG")

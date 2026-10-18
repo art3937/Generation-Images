@@ -21,8 +21,8 @@ android {
         applicationId = "com.example.refactortext"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2       // Увеличьте на 1 для каждого нового релиза в Google Play
-        versionName = "1.1"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
+        versionCode = 1       // Увеличьте на 1 для каждого нового релиза в Google Play
+        versionName = "1"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
 
 
 
@@ -138,9 +138,6 @@ dependencies {
         // Актуальная библиотека Lottie для Jetpack Compose
         implementation("com.airbnb.android:lottie-compose:6.6.0") // или более свежая версия
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1") // используйте актуальную версию для вашего проекта
-
-
-
 
 
 }
