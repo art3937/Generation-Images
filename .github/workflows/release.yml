@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, master ]
 
-# ИСПРАВЛЕНИЕ: Даем облачному сборщику официальные права на создание и перезапись релизов
+# Даем облачному сборщику официальные права на создание и перезапись релизов
 permissions:
   contents: write
 
@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           java-version: '21'
-          distribution: 'temurin'
+          distribution: 'temurin' # Исправлено: строго правильный дистрибутив Java
 
       - name: Grant execute permission to Gradle
         run: chmod +x ./gradlew
@@ -40,7 +40,8 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease
+        # Исправлено: добавлена очистка перед сборкой и отключен старый кэш версий
+        run: ./gradlew clean assembleRelease --no-configuration-cache
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
