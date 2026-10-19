@@ -21,8 +21,8 @@ android {
         applicationId = "com.example.refactortext"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2       // Увеличьте на 1 для каждого нового релиза в Google Play
-        versionName = "1.1"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
+        versionCode = 3       // Увеличьте на 1 для каждого нового релиза в Google Play
+        versionName = "1.2"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
 
 
 
