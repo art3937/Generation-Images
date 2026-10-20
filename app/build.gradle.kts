@@ -21,8 +21,8 @@ android {
         applicationId = "com.example.refactortext"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3       // Увеличьте на 1 для каждого нового релиза в Google Play
-        versionName = "1.2"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
+        versionCode = 4       // Увеличьте на 1 для каждого нового релиза в Google Play
+        versionName = "1.3"   // Укажите понятную пользователям версию (например, "1.0.1" или "1.1")
 
 
 
@@ -32,10 +32,11 @@ android {
         // Если в файле кавычки уже стоят, Gradle запишет их правильно
         val apiKeyVal = localProperties.getProperty("YANDEX_API_KEY") ?: "\"\""
         val folderIdVal = localProperties.getProperty("YANDEX_FOLDER_ID") ?: "\"\""
+        val apiKeySber = localProperties.getProperty("SBER_SECRET") ?: "\"\""
 
         buildConfigField("String", "YANDEX_API_KEY", apiKeyVal)
         buildConfigField("String", "YANDEX_FOLDER_ID", folderIdVal)
-
+        buildConfigField("String", "SBER_SECRET", apiKeySber)
 
 
     }
@@ -138,6 +139,8 @@ dependencies {
         // Актуальная библиотека Lottie для Jetpack Compose
         implementation("com.airbnb.android:lottie-compose:6.6.0") // или более свежая версия
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1") // используйте актуальную версию для вашего проекта
+
+    implementation("com.google.code.gson:gson:2.10.1")
 
 
 }

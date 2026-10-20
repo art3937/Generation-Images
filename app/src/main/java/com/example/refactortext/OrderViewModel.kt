@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
 
 class OrderViewModel : ViewModel() {
 
+    var isRefactoringImageYandex by mutableStateOf(false)
+        private set
+
     // === СОСТОЯНИЯ ЭКРАНА (ДАННЫЕ) ===
     // Текст, который пользователь вводит в поле ввода
     var inputText by mutableStateOf("")
@@ -170,7 +173,7 @@ class OrderViewModel : ViewModel() {
     }
 
     fun copyToClipboardYandex(context: Context, onToast: (String) -> Unit) {
-        if (resultText.isBlank()) return onToast("Нечего копировать!")
+        if (resultTextYandex.isBlank()) return onToast("Нечего копировать!")
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Order", resultTextYandex))
         onToast("Скопировано!")
@@ -203,4 +206,34 @@ class OrderViewModel : ViewModel() {
 //            "1.0"
 //        }
 //    }
+
+    fun refactorImageYandex(sourceBitmap: Bitmap, showToast: (String) -> Unit) {
+        if (inputText.isBlank()) {
+            showToast("Введите текст описания изменений!")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                isRefactoringImageYandex = true
+
+                // Вызываем наш сетевой класс для изменения фото
+                val refactoredBitmap = GigaChatImageDownloader.generateImageFromPrompt(
+
+                    promptText = inputText
+                )
+
+                if (refactoredBitmap != null) {
+                    generatedBitmapYandex = refactoredBitmap
+                    showToast("Фото успешно изменено!")
+                } else {
+                    showToast("Не удалось изменить изображение. Проверьте логи.")
+                }
+            } catch (e: Exception) {
+                showToast("Ошибка: ${e.message}")
+            } finally {
+                isRefactoringImageYandex = false
+            }
+        }
+    }
 }

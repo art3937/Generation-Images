@@ -2,10 +2,15 @@ package com.example.refactortext
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
 import androidx.compose.runtime.getValue
 import android.widget.Toast
 import com.airbnb.lottie.compose.rememberLottieAnimatable
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -97,6 +102,26 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         uri?.let { viewModel.saveExcel(context, it, showToast) }
     }
 
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { sourceUri ->
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = ImageDecoder.createSource(context.contentResolver, sourceUri)
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ -> decoder.isMutableRequired = true }
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, sourceUri)
+                }
+                // Вызываем метод, который мы только что добавили в ViewModel
+                viewModel.refactorImageYandex(bitmap, showToast)
+            } catch (e: Exception) {
+                showToast("Не удалось загрузить изображение")
+            }
+        }
+    }
     // Главный контейнер экрана с поддержкой вертикального скролла (если элементов много, они будут прокручиваться)
     Column(
         modifier = modifier
@@ -235,6 +260,23 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 isLoading = viewModel.isGeneratingImageYandex,
                 onClick = { focusManager.clearFocus(); viewModel.generateImageYandex(showToast) },
                 modifier = Modifier.weight(1.1f),
+                isSecondary = true
+            )
+
+            AnimatedButton(
+                text = "ИЗМЕНИТЬ ФОТО",
+                loadingText = "Меняю...",
+                isLoading = viewModel.isRefactoringImageYandex, // Берет состояние из ViewModel
+                onClick = {
+                    focusManager.clearFocus()
+                    if (viewModel.inputText.isBlank()) {
+                        showToast("Сначала введите описание изменений в поле выше!")
+                    } else {
+                        // Запускаем галерею для выбора фото
+                        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                },
+                modifier = Modifier.weight(1f),
                 isSecondary = true
             )
 
@@ -502,6 +544,7 @@ fun AnimatedButton(
             }
         }
     }
+
 }
 
 
