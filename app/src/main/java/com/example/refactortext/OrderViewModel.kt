@@ -30,6 +30,8 @@ class OrderViewModel : ViewModel() {
     // Текст ответа от ИИ, который мы выводим в карточке результатов
     var resultText by mutableStateOf("")
     var resultTextYandex by mutableStateOf("")
+
+    var resultTextSber: String? by mutableStateOf("")
  var generated3DFilePath by mutableStateOf<File?>(null)
     // Битмап сгенерированной картинки (null, если картинки ещё нет)
     var generatedBitmap by mutableStateOf<Bitmap?>(null)
@@ -43,6 +45,8 @@ class OrderViewModel : ViewModel() {
     // === СОСТОЯНИЯ ЗАГРУЗКИ (ИНДИКАТОРЫ) ===
     var isParsing by mutableStateOf(false)
     var isParsingYandex by mutableStateOf(false)   // Идет ли парсинг текста
+
+    var isParsingSber by mutableStateOf(false)
     var isGeneratingImage by mutableStateOf(false)  // Рисует ли ИИ картинку
 
     var isGeneratingImageSber by mutableStateOf(false)
@@ -58,6 +62,8 @@ class OrderViewModel : ViewModel() {
     // Показывать ли блок с результатами? Показываем, только если там есть текст
     val isResultVisible: Boolean get() = resultText.isNotBlank()
     val isResultVisibleYandex: Boolean get() = resultTextYandex.isNotBlank()
+
+    val isResultVisibleSber: Boolean get() = resultTextSber?.isNotBlank() ?: false
 
     // Показывать ли кнопку Excel? Только если в заказе есть новые позиции или позиции на обмен
     val isExcelVisible: Boolean get() = lastOrder?.let {
@@ -108,6 +114,22 @@ class OrderViewModel : ViewModel() {
                 onToast("Ошибка сети!")
             } finally {
                 isParsingYandex = false // Выключаем режим загрузки в любом случае
+            }
+        }
+    }
+
+    fun parseTextSber(onToast: (String) -> Unit) {
+        if (inputText.isBlank()) return onToast("Поле ввода пусто!")
+
+        isParsingSber = true // Включаем режим загрузки (кнопка заблокируется и сменит текст)
+        viewModelScope.launch {
+            try {
+                val res = GigaChatPostGenerator.generatePost(inputText)
+                resultTextSber = res
+            } catch (e: Exception) {
+                onToast("Ошибка сети!")
+            } finally {
+                isParsingSber = false // Выключаем режим загрузки в любом случае
             }
         }
     }

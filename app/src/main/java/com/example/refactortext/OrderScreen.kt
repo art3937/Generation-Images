@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.LottieAnimation
@@ -274,6 +275,16 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
 
             )
 
+            AnimatedButton(
+                text = "Сгенерировать пост через сбер",
+                loadingText = "Генерирую...",
+                isLoading = viewModel.isParsingSber,
+                onClick = { focusManager.clearFocus(); viewModel.parseTextSber(showToast) },
+                modifier = Modifier.weight(1.1f)
+                    .height(IntrinsicSize.Min) // Кнопка зафиксирует минимально необходимую высоту для текста в 1 строку
+
+            )
+
             // Кнопка 2: КАРТИНКА ИИ
             AnimatedButton(
                 text = "КАРТИНКА ИИ От Яндекса",
@@ -390,6 +401,50 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                         // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
                         ElevatedButton(onClick = {
                             viewModel.copyToClipboardYandex(
+                                context,
+                                showToast
+                            )
+                        }, modifier = Modifier.weight(1f)) {
+                            Text("Копировать")
+                        }
+                        ElevatedButton(
+                            onClick = { txtLauncherYandex.launch("postYandex.txt") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Сохранить TXT")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (viewModel.isResultVisibleSber) {
+            ElevatedCard( // 👈 Вместо Card используем ElevatedCard
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp), // 👈 Современное крупное скругление углов
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow // 👈 Профессиональный мягкий фон
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp) // 👈 Идеально просчитанная тень
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    viewModel.resultTextSber?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
+                        ElevatedButton(onClick = {
+                            viewModel.copyToClipboardYandex(//пределать
                                 context,
                                 showToast
                             )
@@ -602,116 +657,77 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 fun AnimatedButton(
-    text: String,                 // Текст на кнопке (например, "РАСПРЕДЕЛИТЬ")
-    loadingText: String,          // Текст, который покажется при загрузке (например, "Считаю...")
-    isLoading: Boolean,           // Флаг: идет ли сейчас загрузка? (true/false)
-    onClick: () -> Unit,          // Блок кода, который сработает при клике по кнопке
-    modifier: Modifier = Modifier, // Базовый модификатор (сюда из Row прилетает вес .weight)
-    isSecondary: Boolean = false  // Если true — кнопка будет фиолетовой, если false — синей
+    text: String,
+    loadingText: String,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isSecondary: Boolean = false
 ) {
-    // -------------------------------------------------------------------------
-    // 1. БЛОК РАСЧЕТА АНИМАЦИЙ СЖАТИЯ И ЦВЕТА
-    // -------------------------------------------------------------------------
+    val scale by animateFloatAsState(
+        if (isLoading) 0.95f else 1f,
+        animationSpec = tween(200),
+        label = "scale"
+    )
 
-    // Анимация масштаба: если загрузка идет, плавно уменьшаем кнопку до 0.95 (на 5% меньше нормы)
-    val scale by animateFloatAsState(if (isLoading) 0.95f else 1f, animationSpec = tween(200), label = "scale")
-
-    // Выбираем базовый цвет кнопки в зависимости от флага isSecondary
     val baseColor = if (isSecondary) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-    // Выбираем блеклый цвет кнопки для режима загрузки
     val loadingColor = if (isSecondary) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer
-    // Анимируем плавный перелив цвета кнопки за 200 миллисекунд
-    val buttonColor by animateColorAsState(if (isLoading) loadingColor else baseColor, animationSpec = tween(200), label = "color")
+    val buttonColor by animateColorAsState(
+        if (isLoading) loadingColor else baseColor,
+        animationSpec = tween(200),
+        label = "color"
+    )
 
-    // -------------------------------------------------------------------------
-    // 2. САМ КОМПОНЕНТ КНОПКИ
-    // -------------------------------------------------------------------------
     Button(
-        onClick = onClick, // Назначаем действие на клик
-
-        // В Модификаторе настраиваются размеры элемента:
-        modifier = modifier
-            .scale(scale), // Применяем эффект анимированного сжатия кнопки
-        // 🛑 ЧТОБЫ СДЕЛАТЬ КНОПКУ КРУПНЕЕ ПО ВЫСОТЕ (Способ 1):
-        // Вы можете жестко зафиксировать высоту кнопке. Напишите тут, например: .height(56.dp)
-
-        enabled = !isLoading, // Блокируем клики во время загрузки ИИ
-
-        // ТУТ НАСТРАИВАЕТСЯ СКРУГЛЕНИЕ УГЛОВ КНОПКИ:
-        // Сейчас стоит 14.dp. Если хотите сделать кнопку более квадратной, уменьшите (например, 8.dp).
-        // Если хотите сделать её идеально круглой капсулой — увеличьте (например, 24.dp).
+        onClick = onClick,
+        modifier = modifier.scale(scale),
+        enabled = !isLoading,
         shape = RoundedCornerShape(14.dp),
-
-        colors = ButtonDefaults.buttonColors(containerColor = buttonColor), // Подставляем анимированный цвет
-
-        // Настройка теней (в покое тень приподнимает кнопку на 4dp, при зажатии пальцем — тень падает до 1dp)
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp),
-
-        // 🛑 ЧТОБЫ СДЕЛАТЬ КНОПКУ КРУПНЕЕ И СОЛИДНЕЕ (Способ 2 — Профессиональный):
-        // Вместо жесткой высоты лучше добавить внутренние отступы (паддинги). Они раздвинут кнопку изнутри.
-        // Чтобы применить, раскомментируйте строчку ниже (уберите знаки //) и настройте цифры:
-         contentPadding = PaddingValues(vertical = 50.dp, horizontal = 10.dp), // vertical отвечает за высоту!
+        colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 1.dp
+        ),
+        // Увеличиваем внутренние отступы, чтобы текст не прилипал к краям
+        contentPadding = PaddingValues(vertical = 16.dp, horizontal = 12.dp)
     ) {
-        // -------------------------------------------------------------------------
-        // 3. ВНУТРЕННОЕ СОДЕРЖИМОЕ КНОПКИ (Что нарисовано внутри плашки)
-        // -------------------------------------------------------------------------
-        // Динамический размер шрифта. Начинается с ваших 13.sp
-        val currentText = if (isLoading) loadingText else text
-        val fontSize = remember(currentText) { mutableStateOf(13.sp) }
-
         Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp), // Отступ между крутилкой загрузки и текстом
-            verticalAlignment = Alignment.CenterVertically // Выравниваем текст и крутилку строго по центру внутри кнопки
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (isLoading) {
-                // Если ИИ сейчас считает или рисует — показываем колесо загрузки
                 CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp), // ТУТ НАСТРАИВАЕТСЯ РАЗМЕР крутилки загрузки
-                    color = baseColor,               // Цвет крутилки совпадает с главным цветом кнопки
-                    strokeWidth = 2.dp               // Толщина линии крутилки
+                    modifier = Modifier.size(18.dp),
+                    color = baseColor,
+                    strokeWidth = 2.dp
                 )
                 Text(
                     text = loadingText,
                     fontWeight = FontWeight.Bold,
-                    fontSize = fontSize.value,        // 1. Подставляем динамический размер вместо жесткого 13.sp
-                    maxLines = 1,                     // 2. Строго одна строка
-                    softWrap = false,                 // 3. Запрещаем перенос слов на новую строку
-                    onTextLayout = { textLayoutResult ->
-                        if (textLayoutResult.hasVisualOverflow) {
-                            // Проверяем чистое число (значение float)
-                            if (fontSize.value.value > 9f) {
-                                // Правильное уменьшение: берем текущее число, отнимаем 0.5 и упаковываем обратно в .sp
-                                fontSize.value = (fontSize.value.value - 0.5f).sp
-                            }
-                        }
-                    }
-
+                    fontSize = 14.sp,
+                    // Перенос по словам: softWrap = true
+                    softWrap = true,
+                    // Выравнивание по началу (слева) — строки не будут «разлетаться» по центру
+                    textAlign = TextAlign.Start,
+                    maxLines = Int.MAX_VALUE
                 )
             } else {
-                // Если кнопка свободна — рисуем обычный текст
                 Text(
                     text = text,
                     fontWeight = FontWeight.Bold,
-                    fontSize = fontSize.value,        // 1. Подставляем динамический размер вместо жесткого 13.sp
-                    maxLines = 1,                     // 2. Строго одна строка
-                    softWrap = false,                 // 3. Запрещаем перенос слов на новую строку
-                    onTextLayout = { textLayoutResult ->
-                        if (textLayoutResult.hasVisualOverflow) {
-                            // Проверяем чистое число (значение float)
-                            if (fontSize.value.value > 9f) {
-                                // Правильное уменьшение: берем текущее число, отнимаем 0.5 и упаковываем обратно в .sp
-                                fontSize.value = (fontSize.value.value - 0.5f).sp
-                            }
-                        }
-                    }
-
+                    fontSize = 14.sp,
+                    // ГЛАВНОЕ: перенос по словам
+                    softWrap = true,
+                    // Лучше TextAlign.Start или TextAlign.Justify, чем Center — так строки выглядят ровнее
+                    textAlign = TextAlign.Start,
+                    maxLines = Int.MAX_VALUE
                 )
-
             }
         }
     }
-
 }
+
+
 
 
 
