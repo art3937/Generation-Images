@@ -13,8 +13,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 
 class OrderViewModel : ViewModel() {
+
+    var isGenerating3D by mutableStateOf(false)
+        private set
 
     var isRefactoringImageYandex by mutableStateOf(false)
         private set
@@ -26,10 +30,12 @@ class OrderViewModel : ViewModel() {
     // Текст ответа от ИИ, который мы выводим в карточке результатов
     var resultText by mutableStateOf("")
     var resultTextYandex by mutableStateOf("")
-
+ var generated3DFilePath by mutableStateOf<File?>(null)
     // Битмап сгенерированной картинки (null, если картинки ещё нет)
     var generatedBitmap by mutableStateOf<Bitmap?>(null)
     var generatedBitmapYandex by mutableStateOf<Bitmap?>(null)
+
+    var generatedBitmapSber by mutableStateOf<Bitmap?>(null)
 
     // Ссылка на сохранённый файл Excel для кнопки "Открыть Excel"
     var lastSavedExcelUri by mutableStateOf<Uri?>(null)
@@ -38,6 +44,8 @@ class OrderViewModel : ViewModel() {
     var isParsing by mutableStateOf(false)
     var isParsingYandex by mutableStateOf(false)   // Идет ли парсинг текста
     var isGeneratingImage by mutableStateOf(false)  // Рисует ли ИИ картинку
+
+    var isGeneratingImageSber by mutableStateOf(false)
 
     var isGeneratingImageYandex by mutableStateOf(false)  // Рисует ли ИИ картинку
     var isSavingExcel by mutableStateOf(false)      // Сохраняется ли в данный момент Excel
@@ -125,6 +133,28 @@ class OrderViewModel : ViewModel() {
         }
     }
 
+    fun generateImageSber(onToast: (String) -> Unit) {
+        if (inputText.isBlank()) return onToast("Введите описание!")
+
+        isGeneratingImageSber = true
+        viewModelScope.launch {
+            try {
+              val b =  GigaChatImageDownloader.generateImageFromPrompt(
+                    promptText = inputText
+                )
+                if (b != null) {
+                    generatedBitmapSber = b
+                } else {
+                    onToast("Ошибка картинки")
+                }
+            } catch (e: Exception) {
+                onToast("Ошибка ИИ")
+            } finally {
+                isGeneratingImageSber = false
+            }
+        }
+    }
+
     fun generateImage(onToast: (String) -> Unit) {
         if (inputText.isBlank()) return onToast("Введите описание!")
 
@@ -186,6 +216,7 @@ class OrderViewModel : ViewModel() {
         resultText = ""
         generatedBitmap = null
         generatedBitmapYandex = null
+        generatedBitmapSber = null
         lastSavedExcelUri = null
         lastOrder = null
         onToast("Очищено!")
@@ -219,7 +250,6 @@ class OrderViewModel : ViewModel() {
 
                 // Вызываем наш сетевой класс для изменения фото
                 val refactoredBitmap = GigaChatImageDownloader.generateImageFromPrompt(
-
                     promptText = inputText
                 )
 
@@ -236,4 +266,46 @@ class OrderViewModel : ViewModel() {
             }
         }
     }
+
+
+    fun generateModel(context: Context,prompt: String) {
+        viewModelScope.launch {
+            if (prompt.isBlank()) return@launch
+
+            isGenerating3D = true // Включаем крутилку на кнопке
+
+            // 1. ОЧИСТКА КЭША: Находим и принудительно удаляем предыдущую 3D-модель
+            try {
+                val cacheFolder = java.io.File("/data/data/com.example.refactortext/cache")
+                if (cacheFolder.exists()) {
+                    cacheFolder.listFiles()?.forEach { file ->
+                        if (file.name.endsWith(".glb") || file.name.startsWith("generated_model_")) {
+                            val deleted = file.delete()
+                            Log.d("GigaChat", "Старый файл ${file.name} удален из кэша: $deleted")
+                        }
+                    }
+                }
+                // Обнуляем переменную на экране, чтобы старая карточка скрылась до начала загрузки новой
+                generated3DFilePath = null
+            } catch (e: Exception) {
+                Log.e("GigaChat", "Ошибка при очистке предыдущего файла", e)
+            }
+
+            // 2. ЗАГРУЗКА НОВОЙ МОДЕЛИ
+            try {
+                val file = GigaChatImageDownloader.generate3DPictureRobust(context, prompt)
+                if (file != null && file.exists()) {
+                    // Успех! Записываем новый файл во ViewModel, карточка появляется на экране
+                    generated3DFilePath = file
+                    Log.d("GigaChat", "Новый файл готов: ${file.absolutePath}")
+                }
+            } catch (e: Exception) {
+                Log.e("GigaChat", "Ошибка генерации 3D", e)
+            } finally {
+                isGenerating3D = false // Выключаем крутилку, кнопка снова активна
+            }
+        }
+    }
+
+
 }

@@ -1,5 +1,6 @@
 package com.example.refactortext
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
@@ -12,6 +13,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.UUID
@@ -200,4 +203,162 @@ object GigaChatImageDownloader {
             null
         }
     }
+
+
+    suspend fun generate3DPictureRobust(context: Context, promptText: String): File? = withContext(Dispatchers.IO) {
+        val tag = "GigaChatImg"
+        val reqId = UUID.randomUUID().toString()
+
+        Log.d(tag, "[$reqId] START: generate3DPictureRobust, prompt=$promptText")
+
+        try {
+            val token = fetchOAuthToken()
+            if (token.isNullOrBlank()) {
+                Log.e(tag, "[$reqId] Token is empty")
+                return@withContext null
+            }
+
+            // 1. Берём первую модель (без проверок capabilities)
+            val modelsUrl = "https://api.giga.chat/v1/models"
+            val modelsReq = Request.Builder()
+                .url(modelsUrl)
+                .get()
+                .addHeader("Authorization", "Bearer $token")
+                .addHeader("RqUID", reqId)
+                .build()
+
+            client.newCall(modelsReq).execute().use { modelsResp ->
+                if (!modelsResp.isSuccessful) {
+                    Log.e(tag, "[$reqId] Models list error: ${modelsResp.code}")
+                    return@withContext null
+                }
+
+                val modelsJson = JSONObject(modelsResp.body?.string() ?: "{}")
+                val data = modelsJson.getJSONArray("data")
+                if (data.length() == 0) {
+                    Log.e(tag, "[$reqId] No models found")
+                    return@withContext null
+                }
+
+                val modelId = data.getJSONObject(5).getString("id")
+                Log.i(tag, "[$reqId] Using model: $modelId")
+
+                // 2. Формируем запрос (с functions для правильного пути + auto)
+                val fullPrompt = """
+Деревянный стул в стиле ар‑деко. Вид в три четверти. 
+Детали: резные ножки, бархатная обивка цвета пыльной розы. 
+Освещение: тёплый студийный свет, мягкие тени, лёгкий эффект глубины резкости. 
+Стиль: фотореалистичный концепт‑арт, 8k, высокая детализация, без текста, без водяных знаков.
+Не используй стандартные модели и заглушки.
+""".trimIndent()
+
+
+                val jsonParams = JSONObject().apply {
+                    put("model", modelId)
+                    put("function_call", "auto")
+                    put("functions", JSONArray().apply {
+                        put(JSONObject().apply { put("name", "text2image") })
+                    })
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", "Ты — генератор изображений. Если можешь, вызови функцию text2image. Если нет — верни картинку тегом <img>.")
+                        })
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", fullPrompt)
+                        })
+                    })
+                }
+
+                val genUrl = "https://api.giga.chat/v1/chat/completions"
+                val genReq = Request.Builder()
+                    .url(genUrl)
+                    .post(jsonParams.toString().toRequestBody("application/json".toMediaType()))
+                    .addHeader("Authorization", "Bearer $token")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("RqUID", reqId)
+                    .build()
+
+                client.newCall(genReq).execute().use { genResp ->
+                    val raw = genResp.body?.string() ?: ""
+                    if (!genResp.isSuccessful) {
+                        Log.e(tag, "[$reqId] Generation error: ${genResp.code}, body=$raw")
+                        return@withContext null
+                    }
+
+                    Log.d(tag, "[$reqId] Raw response (first 300 chars): ${raw.take(300)}")
+
+                    val choices = JSONObject(raw).getJSONArray("choices")
+                    val message = choices.getJSONObject(0).getJSONObject("message")
+
+                    var fileId: String? = null
+
+                    // --- ВАРИАНТ 1: правильный путь через tool_calls ---
+                    if (message.has("tool_calls") && message.getJSONArray("tool_calls").length() > 0) {
+                        val toolCalls = message.getJSONArray("tool_calls")
+                        val argsStr = toolCalls.getJSONObject(0)
+                            .getJSONObject("function")
+                            .getString("arguments")
+                        val args = JSONObject(argsStr)
+                        fileId = args.optString("file_id") ?: args.optString("image_id")
+                        Log.i(tag, "[$reqId] Got fileId from tool_calls: $fileId")
+                    }
+                    // --- ВАРИАНТ 2: fallback — парсим content на <img src="..." ---
+                    else {
+                        val content = message.optString("content", "")
+                        if (content.contains("<img src=\"")) {
+                            val start = content.indexOf("<img src=\"") + "<img src=\"".length
+                            val end = content.indexOf("\"", start)
+                            if (end > start) {
+                                fileId = content.substring(start, end)
+                                Log.w(tag, "[$reqId] Fallback: fileId parsed from content (no tool_calls): $fileId")
+                            } else {
+                                Log.w(tag, "[$reqId] Found <img>, but could not parse src")
+                            }
+                        } else {
+                            Log.e(tag, "[$reqId] No tool_calls and no <img> in content. Content preview: ${content.take(100)}")
+                        }
+                    }
+
+                    if (fileId.isNullOrBlank()) {
+                        Log.e(tag, "[$reqId] Could not extract fileId")
+                        return@withContext null
+                    }
+
+                    // 3. Скачиваем картинку
+                    val dlUrl = "https://api.giga.chat/v1/files/$fileId/content"
+                    val dlReq = Request.Builder()
+                        .url(dlUrl)
+                        .get()
+                        .addHeader("Authorization", "Bearer $token")
+                        .addHeader("RqUID", reqId)
+                        .build()
+
+                    client.newCall(dlReq).execute().use { dlResp ->
+                        if (!dlResp.isSuccessful) {
+                            Log.e(tag, "[$reqId] Download error: ${dlResp.code}")
+                            return@withContext null
+                        }
+                        val inputStream = dlResp.body?.byteStream() ?: return@withContext null
+
+                        // Сохраняем в cacheDir (Android-стиль)
+                        val fileName = "kandinsky_${fileId.replace("-", "")}.png"
+                        val imageFile = File(context.cacheDir, fileName)
+
+                        FileOutputStream(imageFile).use { out ->
+                            inputStream.copyTo(out)
+                        }
+
+                        Log.i(tag, "[$reqId] Image saved: ${imageFile.absolutePath}, size=${imageFile.length()} bytes")
+                        return@withContext imageFile
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            Log.e(tag, "[$reqId] Unexpected exception", ex)
+            return@withContext null
+        }
+    }
+
 }

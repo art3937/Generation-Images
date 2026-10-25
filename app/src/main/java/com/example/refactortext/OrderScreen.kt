@@ -16,6 +16,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -44,7 +45,12 @@ import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
+import io.github.sceneview.SceneView
+import io.github.sceneview.rememberCameraNode
+import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberModelLoader
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
@@ -52,9 +58,9 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     // Запоминаем версию, чтобы не пересчитывать её при каждом рекомпозите
-  // val appVersion = remember(context.packageName) { viewModel.getAppVersion(context) }
+    // val appVersion = remember(context.packageName) { viewModel.getAppVersion(context) }
 
-   val coroutineScope = rememberCoroutineScope()
+    val coroutineScope = rememberCoroutineScope()
 
 
     // FocusManager отвечает за фокус элементов ввода. С его помощью мы будем скрывать клавиатуру.
@@ -70,7 +76,12 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     }
 
     val txtLauncherYandex = rememberLauncherForActivityResult(CreateDocument("text/plain")) { uri ->
-        uri?.let { (context as MainActivity).saveBytes(it, viewModel.resultTextYandex.toByteArray()) }
+        uri?.let {
+            (context as MainActivity).saveBytes(
+                it,
+                viewModel.resultTextYandex.toByteArray()
+            )
+        }
     }
 
     // 2. Для сохранения JPEG-картинки, созданной ИИ
@@ -85,7 +96,7 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-   // 2. Для сохранения JPEG-картинки, созданной ИИ от яндекса
+    // 2. Для сохранения JPEG-картинки, созданной ИИ от яндекса
     val imgLauncherYandex = rememberLauncherForActivityResult(CreateDocument("image/jpeg")) { uri ->
         uri?.let { u ->
             viewModel.generatedBitmapYandex?.let { b ->
@@ -98,9 +109,10 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
     }
 
     // 3. Для сохранения сгенерированной таблицы Excel
-    val xlsLauncher = rememberLauncherForActivityResult(CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) { uri ->
-        uri?.let { viewModel.saveExcel(context, it, showToast) }
-    }
+    val xlsLauncher =
+        rememberLauncherForActivityResult(CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) { uri ->
+            uri?.let { viewModel.saveExcel(context, it, showToast) }
+        }
 
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -110,13 +122,15 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             try {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     val source = ImageDecoder.createSource(context.contentResolver, sourceUri)
-                    ImageDecoder.decodeBitmap(source) { decoder, _, _ -> decoder.isMutableRequired = true }
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        decoder.isMutableRequired = true
+                    }
                 } else {
                     @Suppress("DEPRECATION")
                     MediaStore.Images.Media.getBitmap(context.contentResolver, sourceUri)
                 }
                 // Вызываем метод, который мы только что добавили в ViewModel
-                viewModel.refactorImageYandex(bitmap, showToast)
+               viewModel.refactorImageYandex(bitmap, showToast)
             } catch (e: Exception) {
                 showToast("Не удалось загрузить изображение")
             }
@@ -130,14 +144,19 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp) // Автоматический отступ между элементами в 12dp
     ) {
-        Text( text = "Введите несколько или одно любое слово чтоб сгенерировать текст, а если нужна картинка, нажмите сгенерировать картинку это займет немногим больше времени",
+        Text(
+            text = "Введите несколько или одно любое слово чтоб сгенерировать текст, а если нужна картинка, нажмите сгенерировать картинку это займет немногим больше времени",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
         // Поле ввода текста (Заменяет EditText)
         Surface( // 👈 Оборачиваем в Surface, чтобы придать форму и контрастный белый цвет
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLowest, // 👈 Чисто белый фон плашки
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)), // 👈 Едва заметная тонкая серая граница
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            ), // 👈 Едва заметная тонкая серая граница
             modifier = Modifier.fillMaxWidth()
         ) {
 
@@ -165,8 +184,6 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
         }
 
 
-
-
         // Горизонтальный блок с 3 главными кнопками управления
         Row(
             modifier = Modifier
@@ -180,7 +197,8 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 loadingText = "Генерирую...",
                 isLoading = viewModel.isParsing,
                 onClick = { focusManager.clearFocus(); viewModel.parseText(showToast) },
-                modifier = Modifier.weight(1.1f) .height(IntrinsicSize.Min) // Кнопка зафиксирует минимально необходимую высоту для текста в 1 строку
+                modifier = Modifier.weight(1.1f)
+                    .height(IntrinsicSize.Min) // Кнопка зафиксирует минимально необходимую высоту для текста в 1 строку
 
             )
 
@@ -205,7 +223,10 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             LaunchedEffect(lottieAnimatable.progress) {
                 if (lottieAnimatable.progress == 1f) {
                     viewModel.clearAll(showToast) // Очищаем текстовые поля строго в конце анимации
-                    lottieAnimatable.snapTo(composition = deleteComposition, progress = 0f) // Сбрасываем мусорку в начальный кадр
+                    lottieAnimatable.snapTo(
+                        composition = deleteComposition,
+                        progress = 0f
+                    ) // Сбрасываем мусорку в начальный кадр
                 }
             }
 
@@ -264,22 +285,41 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
             )
 
             AnimatedButton(
-                text = "ИЗМЕНИТЬ ФОТО",
-                loadingText = "Меняю...",
-                isLoading = viewModel.isRefactoringImageYandex, // Берет состояние из ViewModel
+                text = "Картинка ИИ от Сбер",
+                loadingText = "Рисую...",
+                isLoading = viewModel.isGeneratingImageSber, // Берет состояние из ViewModel
                 onClick = {
-                    focusManager.clearFocus()
-                    if (viewModel.inputText.isBlank()) {
-                        showToast("Сначала введите описание изменений в поле выше!")
-                    } else {
-                        // Запускаем галерею для выбора фото
-                        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
+//                    focusManager.clearFocus()
+//                    if (viewModel.inputText.isBlank()) {
+//                        showToast("Сначала введите описание изменений в поле выше!")
+//                    } else {
+//                        // Запускаем галерею для выбора фото
+//                        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+//                    }
+                    viewModel.generateImageSber(showToast)
                 },
                 modifier = Modifier.weight(1f),
                 isSecondary = true
             )
 
+
+            // ВЫЗЫВАЕМ ТУТ: Новая кнопка для генерации 3D-модели
+            AnimatedButton(
+                text = "3D МОДЕЛЬ ИИ",
+                loadingText = "Строю 3D...",
+                isLoading = viewModel.isGenerating3D, // Флаг загрузки из твоей ViewModel
+                onClick = {
+                    focusManager.clearFocus()
+                    if (viewModel.inputText.isBlank()) {
+                        showToast("Сначала введите описание для 3D модели!")
+                    } else {
+                        // ВОТ ЗДЕСЬ ВЫЗЫВАЕТСЯ МЕТОД ИЗ VIEWMODEL
+                        viewModel.generateModel(context,viewModel.inputText)
+                    }
+                },
+                modifier = Modifier.weight(1.1f),
+                isSecondary = true
+            )
         }
 //        Text(
 //            text = "Версия : $appVersion",
@@ -297,15 +337,27 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp) // 👈 Идеально просчитанная тень
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(text = viewModel.resultText, style = MaterialTheme.typography.bodyLarge)
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
-                        ElevatedButton(onClick = { viewModel.copyToClipboard(context, showToast) }, modifier = Modifier.weight(1f)) {
+                        ElevatedButton(
+                            onClick = { viewModel.copyToClipboard(context, showToast) },
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text("Копировать")
                         }
-                        ElevatedButton(onClick = { txtLauncher.launch("zakaz.txt") }, modifier = Modifier.weight(1f)) {
+                        ElevatedButton(
+                            onClick = { txtLauncher.launch("zakaz.txt") },
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text("Сохранить TXT")
                         }
                     }
@@ -322,15 +374,32 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 ),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 5.dp) // 👈 Идеально просчитанная тень
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text = viewModel.resultTextYandex, style = MaterialTheme.typography.bodyLarge)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = viewModel.resultTextYandex,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         // Вместо обычных кнопок ставим ElevatedButton (они с легким объемом)
-                        ElevatedButton(onClick = { viewModel.copyToClipboardYandex(context, showToast) }, modifier = Modifier.weight(1f)) {
+                        ElevatedButton(onClick = {
+                            viewModel.copyToClipboardYandex(
+                                context,
+                                showToast
+                            )
+                        }, modifier = Modifier.weight(1f)) {
                             Text("Копировать")
                         }
-                        ElevatedButton(onClick = { txtLauncherYandex.launch("postYandex.txt") }, modifier = Modifier.weight(1f)) {
+                        ElevatedButton(
+                            onClick = { txtLauncherYandex.launch("postYandex.txt") },
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text("Сохранить TXT")
                         }
                     }
@@ -356,7 +425,10 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 onClick = {
                     try {
                         val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                            setDataAndType(
+                                uri,
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Даем права системе читать этот файл
                         }
                         context.startActivity(intent)
@@ -430,6 +502,100 @@ fun OrderScreen(viewModel: OrderViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        viewModel.generatedBitmapSber?.let { bitmap ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Конвертируем стандартный Android Bitmap в пригодный для Compose ImageBitmap
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Сгенерированная картинка от Сбер",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                    )
+
+                    Button(
+                        onClick = { imgLauncherYandex.launch("ii_img.jpg") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("СОХРАНИТЬ В JPEG")
+                    }
+                }
+            }
+        }
+
+        // Карточка отображения и открытия сгенерированной 3D-модели
+        viewModel.generated3DFilePath?.let { file ->
+            // УБРАЛИ if (file.exists()), чтобы Compose не спотыкался о проверку файловой системы в UI-потоке
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Контейнер-заглушка вместо картинки
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("📦", fontSize = 64.sp) // Крупная иконка 3D-объекта
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "3D-модель готова: ${file.name}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Главная кнопка: Открывает файл во внешнем плеере устройства
+                    Button(
+                        onClick = {
+                            try {
+                                val authority = "${context.packageName}.fileprovider"
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    authority,
+                                    file
+                                )
+
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, "model/gltf-binary")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                showToast("Установите приложение для просмотра 3D (.glb)")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("ОТКРЫТЬ 3D МОДЕЛЬ")
+                    }
+                }
+            }
+        }
+
     }
 
 }

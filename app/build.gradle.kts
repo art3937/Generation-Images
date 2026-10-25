@@ -65,13 +65,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (System.getenv("KEYSTORE_PATH") != null &&
+            signingConfig = if (System.getenv("KEYSTORE_PATH") != null &&
                 System.getenv("KEYSTORE_PASSWORD") != null &&
                 System.getenv("KEY_ALIAS") != null &&
                 System.getenv("KEY_PASSWORD") != null) {
-                signingConfig = signingConfigs.getByName("release")
+                signingConfigs.getByName("release")
             } else {
-                signingConfig = signingConfigs.getByName("debug")
+                signingConfigs.getByName("debug")
             }
         }
     }
@@ -141,6 +141,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1") // используйте актуальную версию для вашего проекта
 
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("io.github.sceneview:sceneview:4.57.0")
 
 
 }
